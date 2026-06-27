@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@gpbm/shared": ["packages/shared/src/index.ts"],
+      "@gpbm/providers": ["packages/providers/src/index.ts"],
+      "@gpbm/parsers": ["packages/parsers/src/index.ts"]
+    }
+  }
+}

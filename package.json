@@ -1,0 +1,19 @@
+{
+  "name": "gpbm-auto-sender",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SaaS-ready dashboard and local agent for automatic PDF bill delivery over WhatsApp.",
+  "scripts": {
+    "dev": "npm run dev -w @gpbm/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}
