@@ -13,6 +13,24 @@ begin
 end;
 $$;
 
+create table public.businesses (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text unique,
+  status text default 'active',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table public.business_users (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid references public.businesses(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  role text not null check (role in ('owner','admin','staff','viewer')),
+  created_at timestamptz default now(),
+  unique (business_id, user_id)
+);
+
 create or replace function public.is_business_member(target_business_id uuid)
 returns boolean
 language sql
@@ -43,24 +61,6 @@ as $$
       and bu.role = any(allowed_roles)
   );
 $$;
-
-create table public.businesses (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  slug text unique,
-  status text default 'active',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create table public.business_users (
-  id uuid primary key default gen_random_uuid(),
-  business_id uuid references public.businesses(id) on delete cascade,
-  user_id uuid references auth.users(id) on delete cascade,
-  role text not null check (role in ('owner','admin','staff','viewer')),
-  created_at timestamptz default now(),
-  unique (business_id, user_id)
-);
 
 create table public.stores (
   id uuid primary key default gen_random_uuid(),
