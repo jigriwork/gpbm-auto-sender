@@ -18,6 +18,9 @@ export function loadAgentConfig(): AgentConfig {
     incoming_folder: requiredEnv("AGENT_INCOMING_FOLDER"),
     sent_folder: requiredEnv("AGENT_SENT_FOLDER"),
     failed_folder: requiredEnv("AGENT_FAILED_FOLDER"),
-    duplicate_folder: requiredEnv("AGENT_DUPLICATE_FOLDER")
+    duplicate_folder: requiredEnv("AGENT_DUPLICATE_FOLDER"),
+    api_base_url: process.env.AGENT_API_BASE_URL ?? "http://localhost:3000",
+    app_version: process.env.AGENT_APP_VERSION ?? "0.1.0",
+    machine_name: process.env.AGENT_MACHINE_NAME ?? process.env.COMPUTERNAME ?? "unknown-windows-agent"
   };
 }

@@ -56,11 +56,11 @@ export type ParserProfile = {
 export type WhatsAppProviderKey =
   | "msg91"
   | "custom_api"
-  | "interakt"
-  | "wati"
-  | "aisensy"
-  | "gupshup"
-  | "zoko"
+  | "interakt_coming_soon"
+  | "wati_coming_soon"
+  | "aisensy_coming_soon"
+  | "gupshup_coming_soon"
+  | "zoko_coming_soon"
   | "test_disabled";
 
 export type WhatsAppProviderConfig = {
@@ -163,4 +163,7 @@ export type AgentConfig = {
   sent_folder: string;
   failed_folder: string;
   duplicate_folder: string;
+  api_base_url?: string;
+  app_version?: string;
+  machine_name?: string;
 };
