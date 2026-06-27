@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { loadLocalEnv, requireEnv } from "./lib/local-env";
+import { selectRows } from "./lib/supabase-admin";
 
 loadLocalEnv();
 
@@ -10,6 +11,10 @@ const token = process.env.AGENT_TOKEN;
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function runId(): string {
+  return new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
 }
 
 async function postJson(path: string, payload: JsonValue): Promise<{ status: number; body: JsonValue }> {
@@ -34,9 +39,10 @@ async function main() {
   console.log("OK heartbeat");
 
   const storeCode = process.env.STORE_CODE ?? "GP";
-  const billNumber = `TEST-${storeCode}-${today().replace(/-/g, "")}`;
-  const pdfHash = createHash("sha256").update(`smoke:${storeCode}:${today()}`).digest("hex");
-  const intake = await postJson("/api/agent/bills/intake", {
+  const smokeRunId = runId();
+  const billNumber = `TEST-${storeCode}-${smokeRunId}`;
+  const pdfHash = createHash("sha256").update(`smoke:${storeCode}:${smokeRunId}`).digest("hex");
+  const intakePayload = {
     customer_name: "Test Customer",
     customer_mobile: "9876543210",
     bill_number: billNumber,
@@ -48,7 +54,8 @@ async function main() {
     source_file_name: `${billNumber}.pdf`,
     source_file_path: "smoke-test/generated.pdf",
     extraction_confidence: 0.99
-  });
+  };
+  const intake = await postJson("/api/agent/bills/intake", intakePayload);
   if (intake.status >= 300) throw new Error(`Intake failed with ${intake.status}`);
   console.log(`OK intake (${String(intake.body.status ?? "unknown")})`);
 
@@ -63,6 +70,24 @@ async function main() {
   } else {
     console.log("SKIP upload: duplicate or non-upload intake result.");
   }
+
+  const duplicate = await postJson("/api/agent/bills/intake", intakePayload);
+  if (duplicate.status >= 300 || duplicate.body.status !== "duplicate") throw new Error(`Duplicate protection failed with ${duplicate.status}`);
+  console.log("OK duplicate protection");
+
+  if (typeof heartbeat.body.agent_id === "string") {
+    const agents = await selectRows<{ id: string; last_seen_at: string | null }>("agent_devices", { id: heartbeat.body.agent_id }, { select: "id,last_seen_at", limit: 1 });
+    if (!agents[0]?.last_seen_at) throw new Error("Agent last_seen_at was not updated.");
+    console.log("OK agent last_seen_at");
+  }
+
+  const bills = await selectRows<{ id: string }>("bill_documents", { pdf_hash: pdfHash }, { select: "id", limit: 5 });
+  if (bills.length === 0) throw new Error("Smoke bill_document was not found.");
+  console.log("OK bill_documents verification");
+
+  const events = await selectRows<{ id: string }>("bill_events", { bill_document_id: String(intake.body.bill_document_id ?? duplicate.body.bill_document_id) }, { select: "id", limit: 10 });
+  if (events.length === 0) throw new Error("Smoke bill_events were not found.");
+  console.log("OK bill_events verification");
 
   const dashboardToken = process.env.DASHBOARD_AUTH_TOKEN;
   const businessId = process.env.DASHBOARD_BUSINESS_ID;

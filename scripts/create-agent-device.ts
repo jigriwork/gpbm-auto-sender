@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { loadLocalEnv, requireEnv } from "./lib/local-env";
 import { insertRow, selectRows, updateRows } from "./lib/supabase-admin";
 
 loadLocalEnv();
 
-type Args = { business?: string; store?: string; name?: string; machine?: string; rotate: boolean };
+type Args = { business?: string; store?: string; name?: string; machine?: string; tokenFile?: string; rotate: boolean };
 type BusinessRow = { id: string; slug: string | null; name: string };
 type StoreRow = { id: string; business_id: string; code: string | null; name: string };
 type AgentRow = { id: string; name: string; device_code: string | null; status: string };
@@ -18,6 +20,7 @@ function parseArgs(argv: string[]): Args {
     else if (item === "--store") args.store = argv[++i];
     else if (item === "--name") args.name = argv[++i];
     else if (item === "--machine") args.machine = argv[++i];
+    else if (item === "--token-file") args.tokenFile = argv[++i];
     else throw new Error(`Unknown argument: ${item}`);
   }
   return args;
@@ -75,11 +78,21 @@ async function main() {
     ? (await updateRows<AgentRow>("agent_devices", { id: existing.id, business_id: business.id, store_id: store.id }, payload))[0]
     : await insertRow<AgentRow>("agent_devices", payload);
 
+  if (args.tokenFile) {
+    const tokenPath = resolve(process.cwd(), args.tokenFile);
+    mkdirSync(dirname(tokenPath), { recursive: true });
+    writeFileSync(tokenPath, `${plainToken}\n`, { encoding: "utf8", mode: 0o600 });
+  }
+
   console.log(existing ? "Agent token rotated." : "Agent device created.");
   console.log(`Agent ID: ${agent.id}`);
   console.log(`Device code: ${agent.device_code ?? payload.device_code}`);
-  console.log("Plain token (copy now; it is shown only once):");
-  console.log(plainToken);
+  if (args.tokenFile) {
+    console.log("Plain token was written to the requested ignored local token file and was not printed.");
+  } else {
+    console.log("Plain token (copy now; it is shown only once):");
+    console.log(plainToken);
+  }
 }
 
 main().catch((error: unknown) => {
