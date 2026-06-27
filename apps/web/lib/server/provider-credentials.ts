@@ -1,4 +1,4 @@
-import { createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { getRequiredServerEnv } from "./env";
 import { selectRows } from "./supabase-rest";
 
@@ -10,6 +10,12 @@ export type ProviderCredentialRow = {
   encrypted_credentials: Record<string, unknown>;
   is_default: boolean;
   status: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SafeProviderCredential = Omit<ProviderCredentialRow, "encrypted_credentials"> & {
+  credentials_configured: boolean;
 };
 
 function encryptionKey(): Buffer {
@@ -29,6 +35,18 @@ export function decryptCredentialPayload(payload: Record<string, unknown>): Reco
   return JSON.parse(decrypted.toString("utf8")) as Record<string, unknown>;
 }
 
+export function encryptCredentialPayload(payload: Record<string, unknown>): Record<string, string> {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), "utf8"), cipher.final()]);
+  return {
+    ciphertext: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    authTag: cipher.getAuthTag().toString("base64"),
+    alg: "aes-256-gcm"
+  };
+}
+
 export function credentialEncryptionPlaceholder(): Record<string, string> {
   return {
     iv: randomBytes(12).toString("base64"),
@@ -43,4 +61,12 @@ export async function getDefaultProviderCredentials(businessId: string): Promise
     status: "active"
   });
   return rows[0] ?? null;
+}
+
+export function redactProviderCredential(row: ProviderCredentialRow): SafeProviderCredential {
+  const { encrypted_credentials: encryptedCredentials, ...safe } = row;
+  return {
+    ...safe,
+    credentials_configured: Object.keys(encryptedCredentials ?? {}).length > 0
+  };
 }

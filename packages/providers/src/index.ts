@@ -13,16 +13,42 @@ export interface WhatsAppProviderAdapter {
   sendBillMessage(input: SendBillMessageInput): Promise<ProviderSendResult>;
 }
 
+export type Msg91CredentialConfig = {
+  auth_key?: string;
+  integrated_number?: string;
+  sender?: string;
+  template_id?: string;
+  language?: string;
+  namespace?: string;
+};
+
 export class Msg91ProviderAdapter implements WhatsAppProviderAdapter {
   key = "msg91" as const;
   displayName = "MSG91";
 
   async sendBillMessage(input: SendBillMessageInput): Promise<ProviderSendResult> {
-    void input;
+    const testMode = process.env.MSG91_TEST_MODE !== "false";
+    if (testMode) {
+      return {
+        ok: true,
+        provider_message_id: `msg91_test_${input.business_id}_${input.bill_number}`
+      };
+    }
+
+    // Required real-send shape, kept intentionally disabled until verified against
+    // MSG91's live WhatsApp API docs/account configuration:
+    // - auth_key
+    // - integrated_number / sender
+    // - template_id
+    // - language
+    // - template_variables
+    // - pdf_url/media URL
+    // TODO: Implement only after endpoint, payload field names, template namespace,
+    // and media handling are confirmed for the owner's MSG91 account.
     return {
       ok: false,
-      error_code: "MSG91_NOT_CONFIGURED",
-      error_message: "MSG91 adapter placeholder is ready for server-side credentials."
+      error_code: "MSG91_LIVE_SEND_NOT_IMPLEMENTED",
+      error_message: "MSG91 live sending is disabled until endpoint fields and templates are verified."
     };
   }
 }

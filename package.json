@@ -7,7 +7,10 @@
     "dev": "npm run dev -w @gpbm/web",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "verify:supabase": "tsx scripts/verify-supabase.ts",
+    "agent:create": "tsx scripts/create-agent-device.ts",
+    "smoke:agent": "tsx scripts/smoke-agent-api.ts"
   },
   "workspaces": [
     "apps/*",
