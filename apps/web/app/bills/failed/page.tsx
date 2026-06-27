@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { BillStatus } from "@gpbm/shared";
 import { demoBills } from "../../../lib/demo";
 import { AppShell } from "../../../components/nav";
-import { Panel, StatusPill } from "../../../components/ui";
+import { Button, EmptyState, ErrorState, LoadingState, Panel, StatusPill } from "../../../components/ui";
 import { useBusinessContext } from "../../../lib/business-context";
 import { formatDateTime, readApi, safeMessage, storeName, writeApi, type ApiState } from "../../../lib/client-data";
 
@@ -62,30 +62,33 @@ export default function FailedBillsPage() {
   }
 
   return (
-    <AppShell title="Failed Bills" eyebrow="Needs automated retry or review">
-      <Panel title="Failure queue">
-        {state.status === "loading" ? <p className="py-4 text-sm text-neutral-600">Loading failed bills.</p> : null}
-        {state.status === "auth" || state.status === "error" || state.status === "empty" ? <p className="py-4 text-sm text-neutral-600">{state.message}</p> : null}
-        {(state.data ?? []).map((bill) => (
-          <div key={bill.id} className="grid gap-3 border-b border-neutral-200 py-4 last:border-b-0 md:grid-cols-[1fr_1fr_auto] md:items-center">
-            <div>
-              <p className="font-semibold">{bill.bill_number ?? "Bill pending"}</p>
-              <p className="text-sm text-neutral-500">{storeName(bill.store_id)} · updated {formatDateTime(bill.updated_at ?? bill.created_at)}</p>
+    <AppShell title="Failed Bills" eyebrow="Overview" subtitle="Bills that need retry, parser review, or customer data correction.">
+      <Panel title="Failure queue" description="Only failed, invalid mobile, parsing failed, and retrying bill records appear here.">
+        {state.status === "loading" ? <LoadingState title="Loading failed bills" detail="Reading failed and retrying bill records." /> : null}
+        {state.status === "auth" || state.status === "error" ? <ErrorState title="Failure queue unavailable" detail={state.message ?? "Failed bills could not be loaded."} /> : null}
+        {state.status === "empty" ? <EmptyState detail={state.message} /> : null}
+        <div className="grid gap-3">
+          {(state.data ?? []).map((bill) => (
+            <div key={bill.id} className="private-card-compact grid gap-3 p-4 md:grid-cols-[1fr_1fr_auto] md:items-center">
+              <div>
+                <p className="font-semibold">{bill.bill_number ?? "Bill pending"}</p>
+                <p className="text-sm text-neutral-500">{storeName(bill.store_id)} / updated {formatDateTime(bill.updated_at ?? bill.created_at)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-neutral-700">{safeMessage(bill.error_message)}</p>
+                <p className="mt-1 text-xs text-neutral-500">Retry count: {bill.retry_count ?? 0}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusPill>{bill.status}</StatusPill>
+                {resendStatuses.has(bill.status) ? (
+                  <Button type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>
+                    {resendingId === bill.id ? "Queueing" : "Resend"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-neutral-700">{safeMessage(bill.error_message)}</p>
-              <p className="mt-1 text-xs text-neutral-500">Retry count: {bill.retry_count ?? 0}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusPill>{bill.status}</StatusPill>
-              {resendStatuses.has(bill.status) ? (
-                <button className="rounded bg-black px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>
-                  {resendingId === bill.id ? "Queueing" : "Resend"}
-                </button>
-              ) : null}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </Panel>
     </AppShell>
   );

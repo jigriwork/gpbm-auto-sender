@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { demoAgents, demoBills, demoStores } from "../../lib/demo";
 import { AppShell } from "../../components/nav";
-import { Panel, StatusPill } from "../../components/ui";
-import { useBusinessContext } from "../../lib/business-context";
+import { AgentHealthBadge, EmptyState, ErrorState, LoadingState, MetricCard, Panel, ProviderBadge, StatusPill } from "../../components/ui";
 import { formatMoney, readApi, withBusinessId, type ApiState } from "../../lib/client-data";
+import { formatRole, useBusinessContext } from "../../lib/business-context";
 
 type DashboardSummary = {
   sent_today: number;
@@ -42,9 +42,10 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true;
     if (!business.selectedBusinessId) {
-      setState({ status: business.status === "loading" ? "loading" : "auth", data: fallbackSummary, message: business.message || "Select a business to load dashboard data." });
+      setState({ status: business.status === "loading" ? "loading" : "auth", data: fallbackSummary, message: business.message || "Sign in and select a business to load dashboard data." });
       return;
     }
+    setState((current) => ({ status: "loading", data: current.data }));
     readApi<DashboardSummary>(withBusinessId("/api/dashboard/summary", business.selectedBusinessId)).then((result) => {
       if (!active) return;
       if (result.ok) setState({ status: "ready", data: result.data });
@@ -56,63 +57,91 @@ export default function DashboardPage() {
   }, [business.message, business.selectedBusinessId, business.status]);
 
   const data = state.data ?? fallbackSummary;
+  const totalAgents = data.agents_online + data.agents_offline;
   const metrics = useMemo(() => [
     { label: "Sent today", value: data.sent_today, detail: "Delivered from live bill records" },
     { label: "Failed today", value: data.failed_today, detail: "Provider, upload, or send failures" },
-    { label: "Duplicates", value: data.duplicates, detail: "Stopped before sending" },
+    { label: "Duplicates", value: data.duplicates, detail: "Blocked before sending" },
     { label: "Invalid mobile", value: data.invalid_mobile, detail: "Needs customer data review" },
     { label: "Retry queue", value: data.retry_queue, detail: "Queued, retrying, or failed" },
-    { label: "Agents", value: `${data.agents_online}/${data.agents_online + data.agents_offline}`, detail: "Online agents out of total" }
-  ], [data]);
+    { label: "Agents online", value: `${data.agents_online}/${totalAgents || 0}`, detail: "Online agents out of total" }
+  ], [data, totalAgents]);
 
   return (
-    <AppShell title="Dashboard" eyebrow="Live tenant overview">
-      {state.status === "loading" ? <Notice title="Loading live dashboard" detail="Reading dashboard summary from the backend." /> : null}
-      {state.status === "auth" || state.status === "error" ? <Notice title="Connect account" detail={state.message ?? "Live data is not ready."} /> : null}
+    <AppShell title="Dashboard" eyebrow="Overview" subtitle="Live tenant overview for bill automation, agent health, retries, and setup readiness.">
+      {state.status === "loading" ? <LoadingState title="Loading dashboard" detail="Reading live dashboard summary from the backend." /> : null}
+      {state.status === "auth" ? <ErrorState title="Sign-in required" detail={state.message ?? "Please sign in to load live dashboard data."} /> : null}
+      {state.status === "error" ? <ErrorState title="Dashboard data unavailable" detail={state.message ?? "Live data is not available right now."} /> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {metrics.map((metric) => (
-          <Panel key={metric.label}>
-            <p className="text-sm text-neutral-500">{metric.label}</p>
-            <p className="mt-2 text-3xl font-semibold">{metric.value}</p>
-            <p className="mt-2 text-sm text-neutral-600">{metric.detail}</p>
-          </Panel>
-        ))}
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <Panel title="Account and business status">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatusLine label="Email" value={business.email || "Not signed in"} />
+            <StatusLine label="Business" value={business.selectedBusiness?.name ?? "Not selected"} />
+            <StatusLine label="Role" value={business.isSuperAdmin ? "Super Admin" : formatRole(business.selectedRole)} />
+            <StatusLine label="Platform" value={business.isSuperAdmin ? "Super admin enabled" : "Tenant dashboard"} />
+          </div>
+        </Panel>
+        <Panel title="Setup warnings">
+          <div className="grid gap-2">
+            <Warning label="Provider not configured" detail="Connect provider credentials before live sending." />
+            <Warning label="Parser not tested" detail="Real parser accuracy needs sample PDFs." />
+            <Warning label="Template missing" detail="Map template variables before production sends." />
+            {data.agents_offline > 0 ? <Warning label="Agent offline" detail={`${data.agents_offline} agent(s) are not online.`} /> : null}
+          </div>
+        </Panel>
       </div>
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <Panel title="Store-wise counts">
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <Panel title="Store-wise overview" description="Store counts are read from the dashboard summary when available. Demo stores remain visible as setup examples.">
           <div className="grid gap-3">
             {demoStores.map((store) => {
               const counts = data.store_wise_counts[store.id] ?? {};
               const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
               return (
-                <div key={store.id} className="rounded border border-neutral-200 p-3">
-                  <div className="flex items-center justify-between gap-3">
+                <div key={store.id} className="private-card-compact p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium">{store.name}</p>
-                      <p className="text-sm text-neutral-500">Generic PDF Folder Watcher</p>
+                      <p className="font-semibold">{store.name}</p>
+                      <p className="mt-1 text-sm text-neutral-500">Generic PDF Folder Watcher</p>
                     </div>
                     <StatusPill>{total ? `${total} bills` : "empty"}</StatusPill>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-neutral-600">
-                    {Object.keys(counts).length ? Object.entries(counts).map(([status, count]) => <StatusPill key={status}>{status}: {count}</StatusPill>) : "No bill records yet."}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {Object.keys(counts).length ? Object.entries(counts).map(([status, count]) => <StatusPill key={status}>{status}: {count}</StatusPill>) : <span className="text-sm text-neutral-500">No bill records yet.</span>}
                   </div>
                 </div>
               );
             })}
           </div>
         </Panel>
-        <Panel title="Recent demo context">
+
+        <Panel title="System health">
           <div className="grid gap-3">
-            {demoBills.map((bill) => (
-              <div key={bill.id} className="rounded border border-neutral-200 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">{bill.bill_number}</p>
-                  <StatusPill>{bill.status}</StatusPill>
+            <HealthRow label="Agent status" badge={<AgentHealthBadge online={data.agents_online > 0} />} detail={`${data.agents_online} online, ${data.agents_offline} offline`} />
+            <HealthRow label="WhatsApp provider" badge={<ProviderBadge configured={false} />} detail="Placeholder until provider status API is added." />
+            <HealthRow label="Parser status" badge={<StatusPill tone="warning">needs samples</StatusPill>} detail="Sample PDFs are required before real parser confidence." />
+            <HealthRow label="Storage/upload" badge={<StatusPill>backend ready</StatusPill>} detail="Private PDF storage is handled by backend APIs." />
+          </div>
+        </Panel>
+      </div>
+
+      <div className="mt-5">
+        <Panel title="Recent activity">
+          <div className="grid gap-3">
+            {demoBills.length ? demoBills.map((bill) => (
+              <div key={bill.id} className="private-card-compact flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">{bill.bill_number}</p>
+                  <p className="mt-1 text-sm text-neutral-500">{formatMoney(bill.bill_amount)} - fallback sample only</p>
                 </div>
-                <p className="mt-1 text-sm text-neutral-500">{formatMoney(bill.bill_amount)} · fallback sample only</p>
+                <StatusPill>{bill.status}</StatusPill>
               </div>
-            ))}
+            )) : <EmptyState detail="No bill events have been recorded yet." />}
           </div>
         </Panel>
       </div>
@@ -120,11 +149,32 @@ export default function DashboardPage() {
   );
 }
 
-function Notice({ title, detail }: { title: string; detail: string }) {
+function StatusLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="mb-5 rounded border border-neutral-300 bg-white p-4">
-      <p className="font-semibold">{title}</p>
-      <p className="mt-1 text-sm text-neutral-600">{detail}</p>
+    <div className="private-card-compact p-3">
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-neutral-500">{label}</p>
+      <p className="mt-2 truncate text-sm font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function Warning({ label, detail }: { label: string; detail: string }) {
+  return (
+    <div className="rounded border border-neutral-200 bg-neutral-50 p-3">
+      <p className="text-sm font-semibold">{label}</p>
+      <p className="mt-1 text-xs leading-5 text-neutral-600">{detail}</p>
+    </div>
+  );
+}
+
+function HealthRow({ label, badge, detail }: { label: string; badge: React.ReactNode; detail: string }) {
+  return (
+    <div className="private-card-compact p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">{label}</p>
+        {badge}
+      </div>
+      <p className="mt-2 text-xs leading-5 text-neutral-600">{detail}</p>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useBusinessContext } from "../lib/business-context";
 import { readApi, withBusinessId, writeApi } from "../lib/client-data";
-import { Panel, StatusPill } from "./ui";
+import { Button, EmptyState, OneTimeTokenCard, Panel, StatusPill, TextInput } from "./ui";
 
 type Field = { name: string; label: string; placeholder?: string; type?: "text" | "json"; required?: boolean };
 
@@ -81,20 +81,10 @@ export function SettingsResourcePage({ apiPath, title, description, fields, defa
       <Panel title={title}>
         <p className="mb-4 text-sm leading-6 text-neutral-600">{description}</p>
         <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Business: {business.selectedBusiness?.name ?? "Not selected"}</p>
-        {message ? <p className="mb-4 rounded border border-neutral-200 p-3 text-sm text-neutral-600">{message}</p> : null}
-        {oneTimeToken ? (
-          <div className="mb-4 rounded border border-black bg-white p-4">
-            <p className="font-semibold">One-time agent token</p>
-            <p className="mt-1 text-sm text-neutral-600">Copy now. This token will not be shown again.</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <code className="overflow-x-auto rounded border border-neutral-300 bg-neutral-50 p-3 text-xs">{oneTimeToken}</code>
-              <button className="rounded bg-black px-4 py-2 text-sm font-semibold text-white" type="button" onClick={() => void navigator.clipboard?.writeText(oneTimeToken)}>Copy</button>
-            </div>
-            <button className="mt-3 text-sm font-semibold" type="button" onClick={() => setOneTimeToken("")}>Hide token</button>
-          </div>
-        ) : null}
+        {message ? <p className="mb-4 rounded border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600">{message}</p> : null}
+        {oneTimeToken ? <OneTimeTokenCard token={oneTimeToken} onHide={() => setOneTimeToken("")} /> : null}
         <div className="grid gap-3">
-          {rows.map((row) => (
+          {rows.length ? rows.map((row) => (
             <div key={String(row.id)} className="rounded border border-neutral-200 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -110,7 +100,7 @@ export function SettingsResourcePage({ apiPath, title, description, fields, defa
               ) : null}
               {row.one_time_token ? null : <p className="mt-3 text-xs text-neutral-500">ID: {String(row.id)}</p>}
             </div>
-          ))}
+          )) : <EmptyState detail="Create the first record for this business." />}
         </div>
       </Panel>
       <Panel title={`Create ${title.toLowerCase()}`}>
@@ -118,10 +108,10 @@ export function SettingsResourcePage({ apiPath, title, description, fields, defa
           {fields.map((field) => (
             <label key={field.name} className="grid gap-1 text-sm font-medium">
               <span>{field.label}</span>
-              <input value={form[field.name] ?? ""} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="h-10 rounded border border-neutral-300 bg-white px-3 text-sm" placeholder={field.placeholder} required={field.required} />
+              <TextInput value={form[field.name] ?? ""} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} placeholder={field.placeholder} required={field.required} />
             </label>
           ))}
-          <button disabled={saving} className="h-10 rounded bg-black px-4 text-sm font-semibold text-white disabled:opacity-60">{saving ? "Saving..." : "Create"}</button>
+          <Button disabled={saving}>{saving ? "Saving..." : "Create"}</Button>
           <p className="text-xs leading-5 text-neutral-500">Writes require owner/admin membership or super admin. JSON fields must contain valid JSON.</p>
         </form>
       </Panel>

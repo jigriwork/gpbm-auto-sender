@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { BillStatus } from "@gpbm/shared";
 import { demoBills, demoStores } from "../../lib/demo";
 import { AppShell } from "../../components/nav";
-import { Panel, StatusPill } from "../../components/ui";
+import { Button, DataTable, EmptyState, ErrorState, LoadingState, Panel, SelectInput, StatusPill, TextInput } from "../../components/ui";
 import { useBusinessContext } from "../../lib/business-context";
 import { formatDateTime, formatMoney, readApi, redactMobile, redactName, safeMessage, storeName, writeApi, type ApiState } from "../../lib/client-data";
 
@@ -86,7 +86,7 @@ export default function BillsPage() {
   const rows = state.data ?? [];
 
   return (
-    <AppShell title="Bills" eyebrow="Live bill log">
+    <AppShell title="Bills" eyebrow="Overview" subtitle="Filter, inspect, and retry bill PDF sends across stores.">
       <Panel title="Filters" action={<Link className="text-sm font-semibold" href="/bills/failed">Failed bills</Link>}>
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Select label="Store" value={filters.store} onChange={(store) => setFilters((current) => ({ ...current, store }))} options={[["", "All stores"], ...demoStores.map((store) => [store.id, store.name] as [string, string])]} />
@@ -100,44 +100,37 @@ export default function BillsPage() {
 
       <div className="mt-5">
         <Panel title="Recent bills">
-          {state.status === "loading" ? <p className="py-4 text-sm text-neutral-600">Loading bills from backend.</p> : null}
-          {state.status === "auth" || state.status === "error" ? <p className="py-4 text-sm text-neutral-600">{state.message}</p> : null}
-          {state.status === "empty" ? <p className="py-4 text-sm text-neutral-600">{state.message}</p> : null}
-          <div className="overflow-x-auto">
-            <table className="min-w-[980px] w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-xs uppercase text-neutral-500">
-                  {["Date/time", "Store", "Customer", "Mobile", "Bill", "Amount", "Status", "Provider", "Retry", "Sent at", "Actions"].map((header) => <th key={header} className="py-3 pr-4 font-semibold">{header}</th>)}
-                </tr>
-              </thead>
-              <tbody>
+          {state.status === "loading" ? <LoadingState title="Loading bills" detail="Reading bill records from the backend." /> : null}
+          {state.status === "auth" || state.status === "error" ? <ErrorState title="Bills unavailable" detail={state.message ?? "Live bill data is not available."} /> : null}
+          {state.status === "empty" ? <EmptyState detail={state.message} /> : null}
+          {rows.length ? (
+            <DataTable headers={["Date/time", "Store", "Customer", "Mobile", "Bill", "Amount", "Status", "Provider", "Retry", "Sent at", "Actions"]}>
                 {rows.map((bill) => (
-                  <tr key={bill.id} className="border-b border-neutral-200 last:border-b-0">
-                    <td className="py-3 pr-4">{formatDateTime(bill.created_at ?? bill.bill_date)}</td>
-                    <td className="py-3 pr-4">{storeName(bill.store_id)}</td>
-                    <td className="py-3 pr-4">{redactName(bill.customer_name)}</td>
-                    <td className="py-3 pr-4">{redactMobile(bill.customer_mobile)}</td>
-                    <td className="py-3 pr-4 font-medium">{bill.bill_number ?? "Pending"}</td>
-                    <td className="py-3 pr-4">{formatMoney(bill.bill_amount, bill.currency ?? "INR")}</td>
-                    <td className="py-3 pr-4"><StatusPill>{bill.status}</StatusPill></td>
-                    <td className="py-3 pr-4">{bill.provider_key ?? "Default"}</td>
-                    <td className="py-3 pr-4">{bill.retry_count ?? 0}</td>
-                    <td className="py-3 pr-4">{formatDateTime(bill.sent_at)}</td>
-                    <td className="py-3 pr-4">
+                  <tr key={bill.id}>
+                    <td>{formatDateTime(bill.created_at ?? bill.bill_date)}</td>
+                    <td>{storeName(bill.store_id)}</td>
+                    <td>{redactName(bill.customer_name)}</td>
+                    <td>{redactMobile(bill.customer_mobile)}</td>
+                    <td className="font-semibold">{bill.bill_number ?? "Pending"}</td>
+                    <td>{formatMoney(bill.bill_amount, bill.currency ?? "INR")}</td>
+                    <td><StatusPill>{bill.status}</StatusPill></td>
+                    <td>{bill.provider_key ?? "Default"}</td>
+                    <td>{bill.retry_count ?? 0}</td>
+                    <td>{formatDateTime(bill.sent_at)}</td>
+                    <td>
                       <div className="flex gap-2">
-                        <button className="rounded border border-neutral-300 px-3 py-2 text-xs font-semibold" type="button" title={safeMessage(bill.error_message)}>Details</button>
+                        <Button variant="secondary" type="button" title={safeMessage(bill.error_message)}>Details</Button>
                         {retryable.has(bill.status) ? (
-                          <button className="rounded bg-black px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>
+                          <Button type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>
                             {resendingId === bill.id ? "Queueing" : "Resend"}
-                          </button>
+                          </Button>
                         ) : null}
                       </div>
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+            </DataTable>
+          ) : null}
         </Panel>
       </div>
     </AppShell>
@@ -148,7 +141,7 @@ function Input({ label, value, onChange, type = "text", placeholder }: { label: 
   return (
     <label className="grid gap-1 text-sm font-medium">
       <span>{label}</span>
-      <input className="h-10 rounded border border-neutral-300 bg-white px-3 text-sm" type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <TextInput type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -157,9 +150,9 @@ function Select({ label, value, onChange, options }: { label: string; value: str
   return (
     <label className="grid gap-1 text-sm font-medium">
       <span>{label}</span>
-      <select className="h-10 rounded border border-neutral-300 bg-white px-3 text-sm" value={value} onChange={(event) => onChange(event.target.value)}>
+      <SelectInput value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map(([optionValue, labelText]) => <option key={optionValue} value={optionValue}>{labelText}</option>)}
-      </select>
+      </SelectInput>
     </label>
   );
 }

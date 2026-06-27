@@ -1,5 +1,5 @@
 import { AppShell } from "../../components/nav";
-import { Panel, StatusPill } from "../../components/ui";
+import { Panel, SetupStepCard, StatusPill } from "../../components/ui";
 
 const steps = [
   ["Create business", "Create the tenant, owner membership, plan, and audit defaults."],
@@ -13,21 +13,10 @@ const steps = [
 
 export default function OnboardingPage() {
   return (
-    <AppShell title="Onboarding" eyebrow="SaaS setup flow">
+    <AppShell title="Onboarding" eyebrow="Setup" subtitle="Follow the SaaS setup path from tenant creation to test bill sending.">
       <div className="grid gap-4 lg:grid-cols-2">
         {steps.map(([title, detail], index) => (
-          <Panel key={title}>
-            <div className="flex items-start gap-4">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded bg-black text-sm font-semibold text-white">{index + 1}</span>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-semibold">{title}</h2>
-                  <StatusPill>{index < 4 ? "ready" : "placeholder"}</StatusPill>
-                </div>
-                <p className="mt-2 text-sm leading-6 text-neutral-600">{detail}</p>
-              </div>
-            </div>
-          </Panel>
+          <SetupStepCard key={title} index={index + 1} title={title} detail={detail} status={index < 4 ? "ready" : "placeholder"} />
         ))}
       </div>
       <div className="mt-5">

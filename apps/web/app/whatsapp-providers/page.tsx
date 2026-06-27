@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AppShell } from "../../components/nav";
-import { Panel, StatusPill } from "../../components/ui";
+import { Button, EmptyState, ErrorState, LoadingState, Panel, SelectInput, StatusPill, TextInput } from "../../components/ui";
 import { useBusinessContext } from "../../lib/business-context";
 import { readApi, withBusinessId, writeApi, type ApiState } from "../../lib/client-data";
 
@@ -82,14 +82,15 @@ export default function WhatsAppProvidersPage() {
   }
 
   return (
-    <AppShell title="WhatsApp Providers" eyebrow="Provider credentials">
+    <AppShell title="WhatsApp Providers" eyebrow="Setup" subtitle="Connect WhatsApp provider credentials safely. Saved secrets are never displayed back in the browser.">
       <div className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
         <Panel title="Configured credentials">
-          {state.status === "loading" ? <p className="text-sm text-neutral-600">Loading provider status.</p> : null}
-          {state.status === "auth" || state.status === "error" || state.status === "empty" ? <p className="text-sm text-neutral-600">{state.message}</p> : null}
+          {state.status === "loading" ? <LoadingState title="Loading providers" detail="Reading redacted provider credential status." /> : null}
+          {state.status === "auth" || state.status === "error" ? <ErrorState title="Provider settings unavailable" detail={state.message ?? "Provider credentials could not be loaded."} /> : null}
+          {state.status === "empty" ? <EmptyState detail={state.message} /> : null}
           <div className="mt-3 grid gap-3">
             {(state.data ?? []).map((credential) => (
-              <div key={credential.id} className="rounded border border-neutral-200 p-3">
+              <div key={credential.id} className="private-card-compact p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold">{credential.display_name ?? credential.provider_key}</p>
@@ -98,8 +99,8 @@ export default function WhatsAppProvidersPage() {
                   <StatusPill>{credential.is_default ? "default" : credential.status}</StatusPill>
                 </div>
                 <div className="mt-3 flex gap-2">
-                  <button className="rounded border border-neutral-300 px-3 py-2 text-xs font-semibold" type="button" onClick={() => patchCredential(credential, { is_default: true })}>Set default</button>
-                  <button className="rounded border border-neutral-300 px-3 py-2 text-xs font-semibold" type="button" onClick={() => patchCredential(credential, { status: credential.status === "active" ? "disabled" : "active" })}>{credential.status === "active" ? "Disable" : "Enable"}</button>
+                  <Button variant="secondary" type="button" onClick={() => patchCredential(credential, { is_default: true })}>Set default</Button>
+                  <Button variant="secondary" type="button" onClick={() => patchCredential(credential, { status: credential.status === "active" ? "disabled" : "active" })}>{credential.status === "active" ? "Disable" : "Enable"}</Button>
                 </div>
               </div>
             ))}
@@ -110,25 +111,25 @@ export default function WhatsAppProvidersPage() {
           <form className="grid gap-4" onSubmit={save}>
             <label className="grid gap-1 text-sm font-medium">
               <span>Provider</span>
-              <select className="h-10 rounded border border-neutral-300 bg-white px-3" value={provider} onChange={(event) => setProvider(event.target.value as ProviderKey)}>
+              <SelectInput value={provider} onChange={(event) => setProvider(event.target.value as ProviderKey)}>
                 {providers.map((item) => <option key={item.key} value={item.key} disabled={item.disabled}>{item.label}{item.disabled ? " coming soon" : ""}</option>)}
-              </select>
+              </SelectInput>
             </label>
             <label className="grid gap-1 text-sm font-medium">
               <span>Display name</span>
-              <input className="h-10 rounded border border-neutral-300 px-3" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+              <TextInput value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
             </label>
             {selected.fields.map((field) => (
               <label key={field} className="grid gap-1 text-sm font-medium">
                 <span>{field.replaceAll("_", " ")}</span>
-                <input className="h-10 rounded border border-neutral-300 px-3" type={field.includes("key") || field.includes("headers") ? "password" : "text"} value={fields[field] ?? ""} onChange={(event) => setFields((current) => ({ ...current, [field]: event.target.value }))} placeholder="Saved values are never displayed" />
+                <TextInput type={field.includes("key") || field.includes("headers") ? "password" : "text"} value={fields[field] ?? ""} onChange={(event) => setFields((current) => ({ ...current, [field]: event.target.value }))} placeholder="Saved values are never displayed" />
               </label>
             ))}
             <div className="flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2"><input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} /> Default provider</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /> Enabled</label>
             </div>
-            <button className="h-11 rounded bg-black px-4 text-sm font-semibold text-white" type="submit" disabled={selected.disabled}>Save securely</button>
+            <Button type="submit" disabled={selected.disabled}>Save securely</Button>
             {saveMessage ? <p className="text-sm text-neutral-600">{saveMessage}</p> : null}
           </form>
         </Panel>
