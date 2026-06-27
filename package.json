@@ -12,6 +12,8 @@
     "setup:agent-envs": "tsx scripts/write-local-agent-envs.ts",
     "verify:supabase": "tsx scripts/verify-supabase.ts",
     "agent:create": "tsx scripts/create-agent-device.ts",
+    "owner:link": "tsx scripts/link-owner-user.ts",
+    "platform-admin:add": "tsx scripts/platform-admin-add.ts",
     "smoke:agent": "tsx scripts/smoke-agent-api.ts"
   },
   "workspaces": [

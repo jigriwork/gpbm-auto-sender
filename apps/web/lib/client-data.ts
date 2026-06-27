@@ -1,4 +1,5 @@
 import { demoBusiness, demoStores } from "./demo";
+import { createBrowserSupabaseClient } from "./supabase-browser";
 
 export type ApiState<T> =
   | { status: "loading"; data?: T; message?: string }
@@ -9,14 +10,27 @@ export type ApiState<T> =
 
 export const defaultBusinessId = process.env.NEXT_PUBLIC_DEMO_BUSINESS_ID ?? demoBusiness.id;
 
+export const selectedBusinessKey = "gpbm_selected_business_id";
+
 export function getDashboardToken() {
   if (typeof window === "undefined") return "";
   return window.localStorage.getItem("gpbm_dashboard_access_token") ?? "";
 }
 
 export function getBusinessId() {
-  if (typeof window === "undefined") return defaultBusinessId;
-  return window.localStorage.getItem("gpbm_business_id") ?? defaultBusinessId;
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(selectedBusinessKey) ?? window.localStorage.getItem("gpbm_business_id") ?? "";
+}
+
+export function setSelectedBusinessId(value: string) {
+  if (typeof window !== "undefined") window.localStorage.setItem(selectedBusinessKey, value);
+}
+
+export async function getSupabaseAccessToken(): Promise<string> {
+  if (typeof window === "undefined") return "";
+  const supabase = createBrowserSupabaseClient();
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? getDashboardToken();
 }
 
 export function authHeaders(): HeadersInit {
@@ -26,7 +40,8 @@ export function authHeaders(): HeadersInit {
 
 export async function readApi<T>(path: string): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string }> {
   try {
-    const response = await fetch(path, { cache: "no-store", headers: authHeaders() });
+    const token = await getSupabaseAccessToken();
+    const response = await fetch(path, { cache: "no-store", headers: token ? { authorization: `Bearer ${token}` } : authHeaders() });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       const code = body?.error?.code;
@@ -34,10 +49,27 @@ export async function readApi<T>(path: string): Promise<{ ok: true; data: T } | 
       return {
         ok: false,
         status: response.status,
-        message: isAuth ? "Backend is ready. Sign-in/session wiring is required to load live data." : "Live data is not available right now."
+        message: isAuth ? "Please sign in to load live data." : "Live data is not available right now."
       };
     }
     return { ok: true, data: body as T };
+  } catch {
+    return { ok: false, status: 0, message: "Backend connection is not ready in this browser session." };
+  }
+}
+
+export async function writeApi<T>(path: string, method: "POST" | "PATCH", body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string }> {
+  try {
+    const token = await getSupabaseAccessToken();
+    const response = await fetch(path, {
+      method,
+      cache: "no-store",
+      headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, status: response.status, message: payload?.error?.message ?? "Request failed." };
+    return { ok: true, data: payload as T };
   } catch {
     return { ok: false, status: 0, message: "Backend connection is not ready in this browser session." };
   }

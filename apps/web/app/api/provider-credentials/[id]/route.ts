@@ -1,4 +1,4 @@
-import { requireBusinessRole } from "../../../../lib/server/dashboard-auth";
+import { resolveBusinessContext } from "../../../../lib/server/dashboard-auth";
 import { jsonError, jsonOk, readJson } from "../../../../lib/server/http";
 import { encryptCredentialPayload, redactProviderCredential, type ProviderCredentialRow } from "../../../../lib/server/provider-credentials";
 import { selectOne, updateRows } from "../../../../lib/server/supabase-rest";
@@ -20,16 +20,15 @@ function validCredentials(value: unknown): value is Record<string, unknown> {
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const body = await readJson<PatchBody>(request);
-  if (!body.business_id) return jsonError("business_id is required.");
 
-  const user = await requireBusinessRole(request, body.business_id, ["owner", "admin"]);
-  if (!user) return jsonError("Owner/admin business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
+  const ctx = await resolveBusinessContext(request, ["owner", "admin"], body.business_id);
+  if (!ctx) return jsonError("Owner/admin business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
 
-  const existing = await selectOne<ProviderCredentialRow>("provider_credentials", { id, business_id: body.business_id });
+  const existing = await selectOne<ProviderCredentialRow>("provider_credentials", { id, business_id: ctx.businessId });
   if (!existing) return jsonError("Provider credential not found.", 404, "PROVIDER_CREDENTIAL_NOT_FOUND");
 
   if (body.is_default) {
-    await updateRows("provider_credentials", { business_id: body.business_id, is_default: true }, { is_default: false });
+    await updateRows("provider_credentials", { business_id: ctx.businessId, is_default: true }, { is_default: false });
   }
 
   const patch: Record<string, unknown> = {};
@@ -41,6 +40,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     patch.encrypted_credentials = encryptCredentialPayload(body.credentials);
   }
 
-  const updated = (await updateRows<ProviderCredentialRow>("provider_credentials", { id, business_id: body.business_id }, patch))[0];
+  const updated = (await updateRows<ProviderCredentialRow>("provider_credentials", { id, business_id: ctx.businessId }, patch))[0];
   return jsonOk({ data: redactProviderCredential(updated) });
 }

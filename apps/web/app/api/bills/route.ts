@@ -1,5 +1,5 @@
 import { jsonError, jsonOk } from "../../../lib/server/http";
-import { requireBusinessRole } from "../../../lib/server/dashboard-auth";
+import { resolveBusinessContext } from "../../../lib/server/dashboard-auth";
 import { selectRows } from "../../../lib/server/supabase-rest";
 
 export const runtime = "nodejs";
@@ -7,14 +7,13 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const businessId = url.searchParams.get("business_id");
-  if (!businessId) return jsonError("business_id is required.");
-  const user = await requireBusinessRole(request, businessId, ["owner", "admin", "staff", "viewer"]);
-  if (!user) return jsonError("Authenticated business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
+  const ctx = await resolveBusinessContext(request, ["owner", "admin", "staff", "viewer"], businessId);
+  if (!ctx) return jsonError("Authenticated business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
 
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 100);
   const offset = Math.max(Number(url.searchParams.get("offset") ?? 0), 0);
   const rows = await selectRows("bill_documents", {
-    business_id: businessId,
+    business_id: ctx.businessId,
     store_id: url.searchParams.get("store_id") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,
     customer_mobile: url.searchParams.get("mobile") ?? undefined,

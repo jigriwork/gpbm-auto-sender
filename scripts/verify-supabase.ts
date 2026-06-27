@@ -25,12 +25,18 @@ const REQUIRED_TABLES = [
   "bill_documents",
   "bill_events",
   "audit_logs",
+  "platform_admins",
   "subscription_plans",
   "business_subscriptions"
 ];
 
 type BusinessRow = { id: string; slug: string | null; name: string };
 type StoreRow = { id: string; code: string | null; name: string };
+type BusinessUserRow = { user_id: string; role: string };
+type PlatformAdminRow = { user_id: string; email: string; role: string; status: string };
+
+const ADMIN_UID = "ba777d45-4af0-4659-8cb3-edd8e0d204a2";
+const ADMIN_EMAIL = "admin@gpbm.in";
 
 async function main() {
   const missing = missingEnv(REQUIRED_ENV);
@@ -48,6 +54,16 @@ async function main() {
   const business = (await selectRows<BusinessRow>("businesses", { slug: "gpbm" }, { select: "id,slug,name", limit: 1 }))[0];
   if (!business) throw new Error("GPBM seed business is missing.");
   console.log("OK seed business: gpbm");
+
+  const ownerMembership = (await selectRows<BusinessUserRow>("business_users", { business_id: business.id, user_id: ADMIN_UID }, { select: "user_id,role", limit: 1 }))[0];
+  if (ownerMembership?.role !== "owner") throw new Error("admin@gpbm.in is not linked to GPBM as owner.");
+  console.log("OK admin@gpbm.in GPBM owner membership");
+
+  const platformAdmin = (await selectRows<PlatformAdminRow>("platform_admins", { user_id: ADMIN_UID }, { select: "user_id,email,role,status", limit: 1 }))[0];
+  if (platformAdmin?.email !== ADMIN_EMAIL || platformAdmin.role !== "super_admin" || platformAdmin.status !== "active") {
+    throw new Error("admin@gpbm.in is not an active platform super admin.");
+  }
+  console.log("OK admin@gpbm.in platform super admin");
 
   const stores = await selectRows<StoreRow>("stores", { business_id: business.id }, { select: "id,code,name" });
   for (const code of ["GP", "BM"]) {

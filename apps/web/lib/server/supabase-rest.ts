@@ -69,6 +69,20 @@ export async function insertRow<T>(table: string, payload: Record<string, unknow
   return rows[0];
 }
 
+export async function upsertRow<T>(table: string, payload: Record<string, unknown>, onConflict: string): Promise<T> {
+  const url = new URL(`${getSupabaseUrl()}/rest/v1/${table}`);
+  url.searchParams.set("on_conflict", onConflict);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: headers({ prefer: "resolution=merge-duplicates,return=representation" }),
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  const rows = await parseResponse<T[]>(response);
+  if (!rows[0]) throw new SupabaseRestError("Supabase upsert returned no rows", response.status);
+  return rows[0];
+}
+
 export async function updateRows<T>(table: string, filters: SupabaseFilter, payload: Record<string, unknown>): Promise<T[]> {
   const url = buildUrl(table, filters);
   const response = await fetch(url, {

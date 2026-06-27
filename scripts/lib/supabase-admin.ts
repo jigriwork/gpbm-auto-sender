@@ -71,6 +71,36 @@ export async function insertRow<T>(table: string, payload: Record<string, unknow
   return rows[0];
 }
 
+export async function upsertRow<T>(table: string, payload: Record<string, unknown>, onConflict: string): Promise<T> {
+  const url = new URL(`${supabaseUrl()}/rest/v1/${table}`);
+  url.searchParams.set("on_conflict", onConflict);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: headers({ prefer: "resolution=merge-duplicates,return=representation" }),
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  const rows = await parse<T[]>(response);
+  if (!rows[0]) throw new AdminRestError("Supabase upsert returned no rows", response.status);
+  return rows[0];
+}
+
+export async function authAdminGetUserById(uid: string): Promise<{ id: string; email?: string } | null> {
+  const response = await fetch(`${supabaseUrl()}/auth/v1/admin/users/${encodeURIComponent(uid)}`, { headers: headers(), cache: "no-store" });
+  if (response.status === 404) return null;
+  return parse<{ id: string; email?: string }>(response);
+}
+
+export async function authAdminFindUserByEmail(email: string): Promise<{ id: string; email?: string } | null> {
+  const url = new URL(`${supabaseUrl()}/auth/v1/admin/users`);
+  url.searchParams.set("page", "1");
+  url.searchParams.set("per_page", "1000");
+  const response = await fetch(url, { headers: headers(), cache: "no-store" });
+  const body = await parse<{ users?: Array<{ id: string; email?: string }> } | Array<{ id: string; email?: string }>>(response);
+  const users = Array.isArray(body) ? body : body.users ?? [];
+  return users.find((user) => user.email?.toLowerCase() === email.toLowerCase()) ?? null;
+}
+
 export async function updateRows<T>(table: string, filters: Record<string, QueryValue>, payload: Record<string, unknown>): Promise<T[]> {
   const response = await fetch(restUrl(table, filters), {
     method: "PATCH",

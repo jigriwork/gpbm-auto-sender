@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoutButton } from "./logout-button";
 import {
   Building2,
   CreditCard,
@@ -57,9 +58,12 @@ export function AppShell({ children, title, eyebrow }: { children: React.ReactNo
             {eyebrow ? <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">{eyebrow}</p> : null}
             <h1 className="text-3xl font-semibold leading-tight text-black sm:text-4xl">{title}</h1>
           </div>
-          <Link href="/onboarding" className="inline-flex h-11 items-center justify-center rounded bg-black px-4 text-sm font-semibold text-white">
-            Setup business
-          </Link>
+          <div className="flex gap-2">
+            <LogoutButton />
+            <Link href="/onboarding" className="inline-flex h-11 items-center justify-center rounded bg-black px-4 text-sm font-semibold text-white">
+              Setup business
+            </Link>
+          </div>
         </header>
         {children}
       </main>

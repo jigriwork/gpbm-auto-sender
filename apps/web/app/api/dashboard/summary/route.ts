@@ -1,5 +1,5 @@
 import { jsonError, jsonOk } from "../../../../lib/server/http";
-import { requireBusinessRole } from "../../../../lib/server/dashboard-auth";
+import { resolveBusinessContext } from "../../../../lib/server/dashboard-auth";
 import { selectRows } from "../../../../lib/server/supabase-rest";
 
 export const runtime = "nodejs";
@@ -11,15 +11,14 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const businessId = url.searchParams.get("business_id");
   const storeId = url.searchParams.get("store_id") ?? undefined;
-  if (!businessId) return jsonError("business_id is required.");
-  const user = await requireBusinessRole(request, businessId, ["owner", "admin", "staff", "viewer"]);
-  if (!user) return jsonError("Authenticated business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
+  const ctx = await resolveBusinessContext(request, ["owner", "admin", "staff", "viewer"], businessId);
+  if (!ctx) return jsonError("Authenticated business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const bills = await selectRows<BillSummaryRow>("bill_documents", { business_id: businessId, store_id: storeId });
-  const agents = await selectRows<AgentSummaryRow>("agent_devices", { business_id: businessId, store_id: storeId });
+  const bills = await selectRows<BillSummaryRow>("bill_documents", { business_id: ctx.businessId, store_id: storeId });
+  const agents = await selectRows<AgentSummaryRow>("agent_devices", { business_id: ctx.businessId, store_id: storeId });
   const todayBills = bills.filter((bill) => new Date(bill.created_at) >= today);
   const count = (status: string, source = todayBills) => source.filter((bill) => bill.status === status).length;
   const onlineCutoff = Date.now() - 2 * 60 * 1000;

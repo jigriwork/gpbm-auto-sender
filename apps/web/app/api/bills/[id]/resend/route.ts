@@ -1,5 +1,5 @@
 import { logBillEvent, setBillStatus, type BillDocumentRow } from "../../../../../lib/server/bills";
-import { requireBusinessRole } from "../../../../../lib/server/dashboard-auth";
+import { resolveBusinessContext } from "../../../../../lib/server/dashboard-auth";
 import { jsonError, jsonOk, readJson } from "../../../../../lib/server/http";
 import { sendBillViaConfiguredProvider } from "../../../../../lib/server/provider-registry";
 import { selectOne } from "../../../../../lib/server/supabase-rest";
@@ -11,11 +11,10 @@ type ResendBody = { business_id?: string };
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const body = await readJson<ResendBody>(request).catch((): ResendBody => ({}));
-  if (!body.business_id) return jsonError("business_id is required.");
-  const user = await requireBusinessRole(request, body.business_id, ["owner", "admin"]);
-  if (!user) return jsonError("Owner/admin business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
+  const ctx = await resolveBusinessContext(request, ["owner", "admin"], body.business_id);
+  if (!ctx) return jsonError("Owner/admin business membership is required.", 401, "UNAUTHORIZED_DASHBOARD");
 
-  const bill = await selectOne<BillDocumentRow>("bill_documents", { id, business_id: body.business_id });
+  const bill = await selectOne<BillDocumentRow>("bill_documents", { id, business_id: ctx.businessId });
   if (!bill) return jsonError("Bill not found.", 404, "BILL_NOT_FOUND");
   if (bill.status === "sent") return jsonError("Bill is already sent. Force resend is intentionally not enabled yet.", 409, "ALREADY_SENT");
   if (!bill.customer_mobile || !bill.bill_number || !bill.bill_date) return jsonError("Bill is missing required send fields.", 422, "BILL_INCOMPLETE");
