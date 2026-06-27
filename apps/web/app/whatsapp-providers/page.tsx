@@ -3,7 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AppShell } from "../../components/nav";
 import { Panel, StatusPill } from "../../components/ui";
-import { authHeaders, getBusinessId, readApi, type ApiState } from "../../lib/client-data";
+import { useBusinessContext } from "../../lib/business-context";
+import { readApi, withBusinessId, writeApi, type ApiState } from "../../lib/client-data";
 
 type ProviderKey = "msg91" | "custom_api" | "interakt_coming_soon" | "wati_coming_soon" | "aisensy_coming_soon" | "gupshup_coming_soon" | "zoko_coming_soon";
 type Credential = { id: string; provider_key: ProviderKey; display_name?: string | null; is_default: boolean; status: string; credentials_configured?: boolean };
@@ -27,6 +28,7 @@ export default function WhatsAppProvidersPage() {
   const [enabled, setEnabled] = useState(true);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState("");
+  const business = useBusinessContext();
 
   const selected = useMemo(() => providers.find((item) => item.key === provider) ?? providers[0], [provider]);
 
@@ -38,7 +40,11 @@ export default function WhatsAppProvidersPage() {
 
   useEffect(() => {
     let active = true;
-    readApi<CredentialResponse>(`/api/provider-credentials?business_id=${encodeURIComponent(getBusinessId())}`).then((result) => {
+    if (!business.selectedBusinessId) {
+      setState({ status: business.status === "loading" ? "loading" : "auth", data: [], message: business.message || "Select a business to load provider settings." });
+      return;
+    }
+    readApi<CredentialResponse>(withBusinessId("/api/provider-credentials", business.selectedBusinessId)).then((result) => {
       if (!active) return;
       if (result.ok) setState(result.data.data.length ? { status: "ready", data: result.data.data } : { status: "empty", data: [], message: "No provider credentials are configured yet." });
       else setState({ status: result.status === 401 ? "auth" : "error", data: [], message: result.message });
@@ -46,33 +52,33 @@ export default function WhatsAppProvidersPage() {
     return () => {
       active = false;
     };
-  }, [saveMessage]);
+  }, [business.message, business.selectedBusinessId, business.status, saveMessage]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaveMessage("");
-    const response = await fetch("/api/provider-credentials", {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeaders() },
-      body: JSON.stringify({
-        business_id: getBusinessId(),
-        provider_key: provider,
-        display_name: displayName,
-        is_default: isDefault,
-        status: enabled ? "active" : "disabled",
-        credentials: fields
-      })
-    }).catch(() => null);
-    setSaveMessage(response?.ok ? "Saved securely. Secret values are write-only and stay server-side." : response?.status === 401 ? "Sign-in/session wiring is required before saving credentials." : "Credentials could not be saved safely.");
+    if (!business.selectedBusinessId) {
+      setSaveMessage("Select a business before saving credentials.");
+      return;
+    }
+    const response = await writeApi("/api/provider-credentials", "POST", {
+      business_id: business.selectedBusinessId,
+      provider_key: provider,
+      display_name: displayName,
+      is_default: isDefault,
+      status: enabled ? "active" : "disabled",
+      credentials: fields
+    });
+    setSaveMessage(response.ok ? "Saved securely. Secret values are write-only and stay server-side." : response.message || "Credentials could not be saved safely.");
   }
 
   async function patchCredential(credential: Credential, patch: Partial<Credential>) {
-    const response = await fetch(`/api/provider-credentials/${credential.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ business_id: getBusinessId(), ...patch })
-    }).catch(() => null);
-    setSaveMessage(response?.ok ? "Provider setting updated securely." : "Provider setting could not be updated.");
+    if (!business.selectedBusinessId) {
+      setSaveMessage("Select a business before updating provider settings.");
+      return;
+    }
+    const response = await writeApi(`/api/provider-credentials/${credential.id}`, "PATCH", { business_id: business.selectedBusinessId, ...patch });
+    setSaveMessage(response.ok ? "Provider setting updated securely." : response.message || "Provider setting could not be updated.");
   }
 
   return (

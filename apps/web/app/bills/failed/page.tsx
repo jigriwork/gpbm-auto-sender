@@ -5,7 +5,8 @@ import type { BillStatus } from "@gpbm/shared";
 import { demoBills } from "../../../lib/demo";
 import { AppShell } from "../../../components/nav";
 import { Panel, StatusPill } from "../../../components/ui";
-import { authHeaders, formatDateTime, getBusinessId, readApi, safeMessage, storeName, type ApiState } from "../../../lib/client-data";
+import { useBusinessContext } from "../../../lib/business-context";
+import { formatDateTime, readApi, safeMessage, storeName, writeApi, type ApiState } from "../../../lib/client-data";
 
 type FailedBill = {
   id: string;
@@ -26,10 +27,15 @@ const resendStatuses = new Set<BillStatus>(["failed", "queued", "retrying"]);
 export default function FailedBillsPage() {
   const [state, setState] = useState<ApiState<FailedBill[]>>({ status: "loading" });
   const [resendingId, setResendingId] = useState("");
+  const business = useBusinessContext();
 
   useEffect(() => {
     let active = true;
-    Promise.all(failureStatuses.map((status) => readApi<BillsResponse>(`/api/bills?business_id=${encodeURIComponent(getBusinessId())}&status=${status}&limit=100`))).then((results) => {
+    if (!business.selectedBusinessId) {
+      setState({ status: business.status === "loading" ? "loading" : "auth", data: [], message: business.message || "Select a business to load failed bills." });
+      return;
+    }
+    Promise.all(failureStatuses.map((status) => readApi<BillsResponse>(`/api/bills?business_id=${encodeURIComponent(business.selectedBusinessId)}&status=${status}&limit=100`))).then((results) => {
       if (!active) return;
       const failed = results.find((result) => !result.ok);
       if (failed && !failed.ok) {
@@ -42,17 +48,17 @@ export default function FailedBillsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [business.message, business.selectedBusinessId, business.status]);
 
   async function resend(bill: FailedBill) {
+    if (!business.selectedBusinessId) {
+      setState((current) => ({ ...current, message: "Select a business before requesting resend." }));
+      return;
+    }
     setResendingId(bill.id);
-    const response = await fetch(`/api/bills/${bill.id}/resend`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ business_id: getBusinessId() })
-    }).catch(() => null);
+    const response = await writeApi(`/api/bills/${bill.id}/resend`, "POST", { business_id: business.selectedBusinessId });
     setResendingId("");
-    if (!response?.ok) setState((current) => ({ ...current, message: response?.status === 401 ? "Sign-in/session wiring is required before resend can run." : "Resend could not be queued safely." }));
+    if (!response.ok) setState((current) => ({ ...current, message: response.message || "Resend could not be queued safely." }));
   }
 
   return (

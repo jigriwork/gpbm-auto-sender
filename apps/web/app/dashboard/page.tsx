@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { demoAgents, demoBills, demoStores } from "../../lib/demo";
 import { AppShell } from "../../components/nav";
 import { Panel, StatusPill } from "../../components/ui";
-import { formatMoney, getBusinessId, readApi, type ApiState } from "../../lib/client-data";
+import { useBusinessContext } from "../../lib/business-context";
+import { formatMoney, readApi, withBusinessId, type ApiState } from "../../lib/client-data";
 
 type DashboardSummary = {
   sent_today: number;
@@ -36,11 +37,15 @@ const fallbackSummary: DashboardSummary = {
 
 export default function DashboardPage() {
   const [state, setState] = useState<ApiState<DashboardSummary>>({ status: "loading" });
+  const business = useBusinessContext();
 
   useEffect(() => {
     let active = true;
-    const businessId = getBusinessId();
-    readApi<DashboardSummary>(`/api/dashboard/summary?business_id=${encodeURIComponent(businessId)}`).then((result) => {
+    if (!business.selectedBusinessId) {
+      setState({ status: business.status === "loading" ? "loading" : "auth", data: fallbackSummary, message: business.message || "Select a business to load dashboard data." });
+      return;
+    }
+    readApi<DashboardSummary>(withBusinessId("/api/dashboard/summary", business.selectedBusinessId)).then((result) => {
       if (!active) return;
       if (result.ok) setState({ status: "ready", data: result.data });
       else setState({ status: result.status === 401 ? "auth" : "error", data: fallbackSummary, message: result.message });
@@ -48,7 +53,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [business.message, business.selectedBusinessId, business.status]);
 
   const data = state.data ?? fallbackSummary;
   const metrics = useMemo(() => [

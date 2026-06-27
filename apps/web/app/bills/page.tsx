@@ -6,7 +6,8 @@ import type { BillStatus } from "@gpbm/shared";
 import { demoBills, demoStores } from "../../lib/demo";
 import { AppShell } from "../../components/nav";
 import { Panel, StatusPill } from "../../components/ui";
-import { authHeaders, formatDateTime, formatMoney, getBusinessId, readApi, redactMobile, redactName, safeMessage, storeName, type ApiState } from "../../lib/client-data";
+import { useBusinessContext } from "../../lib/business-context";
+import { formatDateTime, formatMoney, readApi, redactMobile, redactName, safeMessage, storeName, writeApi, type ApiState } from "../../lib/client-data";
 
 type BillRow = {
   id: string;
@@ -33,9 +34,11 @@ export default function BillsPage() {
   const [filters, setFilters] = useState({ store: "", status: "", from: "", to: "", mobile: "", bill: "" });
   const [state, setState] = useState<ApiState<BillRow[]>>({ status: "loading" });
   const [resendingId, setResendingId] = useState("");
+  const business = useBusinessContext();
 
   const query = useMemo(() => {
-    const params = new URLSearchParams({ business_id: getBusinessId(), limit: "100" });
+    const params = new URLSearchParams({ limit: "100" });
+    if (business.selectedBusinessId) params.set("business_id", business.selectedBusinessId);
     if (filters.store) params.set("store_id", filters.store);
     if (filters.status) params.set("status", filters.status);
     if (filters.from) params.set("date_from", filters.from);
@@ -43,10 +46,14 @@ export default function BillsPage() {
     if (filters.mobile) params.set("mobile", filters.mobile);
     if (filters.bill) params.set("bill_number", filters.bill);
     return params.toString();
-  }, [filters]);
+  }, [business.selectedBusinessId, filters]);
 
   useEffect(() => {
     let active = true;
+    if (!business.selectedBusinessId) {
+      setState({ status: business.status === "loading" ? "loading" : "auth", data: [], message: business.message || "Select a business to load bills." });
+      return;
+    }
     setState((current) => ({ status: "loading", data: current.data }));
     readApi<BillsResponse>(`/api/bills?${query}`).then((result) => {
       if (!active) return;
@@ -59,18 +66,18 @@ export default function BillsPage() {
     return () => {
       active = false;
     };
-  }, [query]);
+  }, [business.message, business.selectedBusinessId, business.status, query]);
 
   async function resend(bill: BillRow) {
+    if (!business.selectedBusinessId) {
+      setState((current) => ({ ...current, message: "Select a business before requesting resend." }));
+      return;
+    }
     setResendingId(bill.id);
-    const result = await fetch(`/api/bills/${bill.id}/resend`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ business_id: getBusinessId() })
-    }).then(async (response) => ({ ok: response.ok, status: response.status })).catch(() => ({ ok: false, status: 0 }));
+    const result = await writeApi(`/api/bills/${bill.id}/resend`, "POST", { business_id: business.selectedBusinessId });
     setResendingId("");
     if (!result.ok) {
-      setState((current) => ({ ...current, message: result.status === 401 ? "Sign-in/session wiring is required before resend can run." : "Resend could not be queued safely." }));
+      setState((current) => ({ ...current, message: result.message || "Resend could not be queued safely." }));
       return;
     }
     setFilters((current) => ({ ...current }));

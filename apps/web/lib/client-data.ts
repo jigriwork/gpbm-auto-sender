@@ -12,11 +12,6 @@ export const defaultBusinessId = process.env.NEXT_PUBLIC_DEMO_BUSINESS_ID ?? dem
 
 export const selectedBusinessKey = "gpbm_selected_business_id";
 
-export function getDashboardToken() {
-  if (typeof window === "undefined") return "";
-  return window.localStorage.getItem("gpbm_dashboard_access_token") ?? "";
-}
-
 export function getBusinessId() {
   if (typeof window === "undefined") return "";
   return window.localStorage.getItem(selectedBusinessKey) ?? window.localStorage.getItem("gpbm_business_id") ?? "";
@@ -30,49 +25,48 @@ export async function getSupabaseAccessToken(): Promise<string> {
   if (typeof window === "undefined") return "";
   const supabase = createBrowserSupabaseClient();
   const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? getDashboardToken();
+  return data.session?.access_token ?? "";
 }
 
-export function authHeaders(): HeadersInit {
-  const token = getDashboardToken();
-  return token ? { authorization: `Bearer ${token}` } : {};
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; message: string };
+
+function safeApiMessage(status: number, body: Record<string, unknown>) {
+  const error = body.error as { code?: string; message?: string } | undefined;
+  const isAuth = status === 401 || error?.code === "UNAUTHORIZED_DASHBOARD";
+  if (isAuth) return "Please sign in to load live data.";
+  return typeof error?.message === "string" && error.message.length < 160 ? error.message : "Live data is not available right now.";
 }
 
-export async function readApi<T>(path: string): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string }> {
+export async function apiRequest<T>(path: string, options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: Record<string, unknown> } = {}): Promise<ApiResult<T>> {
   try {
     const token = await getSupabaseAccessToken();
-    const response = await fetch(path, { cache: "no-store", headers: token ? { authorization: `Bearer ${token}` } : authHeaders() });
+    if (!token) return { ok: false, status: 401, message: "Please sign in to load live data." };
+    const response = await fetch(path, {
+      method: options.method ?? "GET",
+      cache: "no-store",
+      headers: { authorization: `Bearer ${token}`, ...(options.body ? { "content-type": "application/json" } : {}) },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const code = body?.error?.code;
-      const isAuth = response.status === 401 || code === "UNAUTHORIZED_DASHBOARD";
-      return {
-        ok: false,
-        status: response.status,
-        message: isAuth ? "Please sign in to load live data." : "Live data is not available right now."
-      };
-    }
+    if (!response.ok) return { ok: false, status: response.status, message: safeApiMessage(response.status, body) };
     return { ok: true, data: body as T };
   } catch {
     return { ok: false, status: 0, message: "Backend connection is not ready in this browser session." };
   }
 }
 
-export async function writeApi<T>(path: string, method: "POST" | "PATCH", body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string }> {
-  try {
-    const token = await getSupabaseAccessToken();
-    const response = await fetch(path, {
-      method,
-      cache: "no-store",
-      headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify(body)
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return { ok: false, status: response.status, message: payload?.error?.message ?? "Request failed." };
-    return { ok: true, data: payload as T };
-  } catch {
-    return { ok: false, status: 0, message: "Backend connection is not ready in this browser session." };
-  }
+export async function readApi<T>(path: string): Promise<ApiResult<T>> {
+  return apiRequest<T>(path);
+}
+
+export async function writeApi<T>(path: string, method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown>): Promise<ApiResult<T>> {
+  return apiRequest<T>(path, { method, body });
+}
+
+export function withBusinessId(path: string, businessId?: string | null) {
+  if (!businessId) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}business_id=${encodeURIComponent(businessId)}`;
 }
 
 export function storeName(storeId?: string | null) {
