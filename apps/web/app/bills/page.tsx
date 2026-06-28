@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { BillStatus } from "@gpbm/shared";
+import { Eye, MoreHorizontal, RefreshCw } from "lucide-react";
 import { demoBills, demoStores } from "../../lib/demo";
 import { AppShell } from "../../components/nav";
-import { Button, DataTable, EmptyState, ErrorState, LoadingState, Panel, SelectInput, StatusPill, TextInput } from "../../components/ui";
+import { Button, DataTable, Drawer, EmptyState, ErrorState, FilterBar, LoadingState, MobileDataCard, Panel, SelectInput, StatusPill, Tabs, TextInput, Timeline } from "../../components/ui";
 import { useBusinessContext } from "../../lib/business-context";
 import { formatDateTime, formatMoney, readApi, redactMobile, redactName, safeMessage, storeName, writeApi, type ApiState } from "../../lib/client-data";
 
@@ -20,6 +21,8 @@ type BillRow = {
   currency?: string | null;
   status: BillStatus;
   provider_key?: string | null;
+  provider_message_id?: string | null;
+  pdf_path?: string | null;
   retry_count?: number | null;
   sent_at?: string | null;
   created_at?: string | null;
@@ -29,11 +32,21 @@ type BillRow = {
 type BillsResponse = { data: BillRow[]; pagination: { count: number; limit: number; offset: number } };
 
 const retryable = new Set<BillStatus>(["failed", "queued", "retrying"]);
+const statusTabs = [
+  { value: "", label: "All" },
+  { value: "sent", label: "Sent" },
+  { value: "failed", label: "Failed" },
+  { value: "queued", label: "Queued" },
+  { value: "retrying", label: "Retrying" },
+  { value: "invalid_mobile", label: "Invalid mobile" },
+  { value: "duplicate", label: "Duplicate" }
+];
 
 export default function BillsPage() {
   const [filters, setFilters] = useState({ store: "", status: "", from: "", to: "", mobile: "", bill: "" });
   const [state, setState] = useState<ApiState<BillRow[]>>({ status: "loading" });
   const [resendingId, setResendingId] = useState("");
+  const [selectedBill, setSelectedBill] = useState<BillRow | null>(null);
   const business = useBusinessContext();
 
   const query = useMemo(() => {
@@ -57,11 +70,8 @@ export default function BillsPage() {
     setState((current) => ({ status: "loading", data: current.data }));
     readApi<BillsResponse>(`/api/bills?${query}`).then((result) => {
       if (!active) return;
-      if (result.ok) {
-        setState(result.data.data.length ? { status: "ready", data: result.data.data } : { status: "empty", data: [], message: "No bills match these filters yet." });
-      } else {
-        setState({ status: result.status === 401 ? "auth" : "error", data: demoBills as BillRow[], message: result.message });
-      }
+      if (result.ok) setState(result.data.data.length ? { status: "ready", data: result.data.data } : { status: "empty", data: [], message: "No bills match these filters yet." });
+      else setState({ status: result.status === 401 ? "auth" : "error", data: demoBills as BillRow[], message: result.message });
     });
     return () => {
       active = false;
@@ -86,25 +96,27 @@ export default function BillsPage() {
   const rows = state.data ?? [];
 
   return (
-    <AppShell title="Bills" eyebrow="Overview" subtitle="Filter, inspect, and retry bill PDF sends across stores.">
-      <Panel title="Filters" action={<Link className="text-sm font-semibold" href="/bills/failed">Failed bills</Link>}>
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <AppShell title="Bills" eyebrow="Bill monitoring" subtitle="Filter, inspect, and retry bill PDF sends across stores without exposing customer data unnecessarily.">
+      <Tabs tabs={statusTabs} active={filters.status} onChange={(status) => setFilters((current) => ({ ...current, status }))} />
+      <div className="mt-4">
+        <FilterBar action={<Link className="text-sm font-semibold" href="/bills/failed">Open failed queue</Link>}>
           <Select label="Store" value={filters.store} onChange={(store) => setFilters((current) => ({ ...current, store }))} options={[["", "All stores"], ...demoStores.map((store) => [store.id, store.name] as [string, string])]} />
-          <Select label="Status" value={filters.status} onChange={(status) => setFilters((current) => ({ ...current, status }))} options={[["", "All statuses"], ...["sent", "failed", "queued", "retrying", "invalid_mobile", "parsing_failed", "duplicate"].map((status) => [status, status] as [string, string])]} />
+          <Input label="Bill no." value={filters.bill} onChange={(bill) => setFilters((current) => ({ ...current, bill }))} placeholder="Bill number" />
+          <Input label="Mobile" value={filters.mobile} onChange={(mobile) => setFilters((current) => ({ ...current, mobile }))} placeholder="Exact mobile" />
           <Input label="From" type="date" value={filters.from} onChange={(from) => setFilters((current) => ({ ...current, from }))} />
           <Input label="To" type="date" value={filters.to} onChange={(to) => setFilters((current) => ({ ...current, to }))} />
-          <Input label="Mobile" value={filters.mobile} onChange={(mobile) => setFilters((current) => ({ ...current, mobile }))} placeholder="Exact mobile" />
-          <Input label="Bill no." value={filters.bill} onChange={(bill) => setFilters((current) => ({ ...current, bill }))} placeholder="Bill number" />
-        </div>
-      </Panel>
+          <Button type="button" variant="secondary" onClick={() => setFilters({ store: "", status: "", from: "", to: "", mobile: "", bill: "" })}>Clear</Button>
+        </FilterBar>
+      </div>
 
       <div className="mt-5">
-        <Panel title="Recent bills">
+        <Panel title="Recent bills" description="Desktop uses a dense table; mobile uses readable cards. Names and mobiles are redacted.">
           {state.status === "loading" ? <LoadingState title="Loading bills" detail="Reading bill records from the backend." /> : null}
           {state.status === "auth" || state.status === "error" ? <ErrorState title="Bills unavailable" detail={state.message ?? "Live bill data is not available."} /> : null}
           {state.status === "empty" ? <EmptyState detail={state.message} /> : null}
           {rows.length ? (
-            <DataTable headers={["Date/time", "Store", "Customer", "Mobile", "Bill", "Amount", "Status", "Provider", "Retry", "Sent at", "Actions"]}>
+            <>
+              <DataTable headers={["Date/time", "Store", "Customer", "Mobile", "Bill", "Amount", "Status", "Provider", "Retry", "Sent at", "Actions"]}>
                 {rows.map((bill) => (
                   <tr key={bill.id}>
                     <td>{formatDateTime(bill.created_at ?? bill.bill_date)}</td>
@@ -119,22 +131,77 @@ export default function BillsPage() {
                     <td>{formatDateTime(bill.sent_at)}</td>
                     <td>
                       <div className="flex gap-2">
-                        <Button variant="secondary" type="button" title={safeMessage(bill.error_message)}>Details</Button>
+                        <Button variant="secondary" type="button" title={safeMessage(bill.error_message)} onClick={() => setSelectedBill(bill)}><Eye size={15} /> Details</Button>
                         {retryable.has(bill.status) ? (
                           <Button type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>
-                            {resendingId === bill.id ? "Queueing" : "Resend"}
+                            <RefreshCw size={15} /> {resendingId === bill.id ? "Queueing" : "Resend"}
                           </Button>
                         ) : null}
                       </div>
                     </td>
                   </tr>
                 ))}
-            </DataTable>
+              </DataTable>
+              <div className="grid gap-3 lg:hidden">
+                {rows.map((bill) => (
+                  <MobileDataCard
+                    key={bill.id}
+                    title={bill.bill_number ?? "Bill pending"}
+                    subtitle={`${storeName(bill.store_id)} / ${formatDateTime(bill.created_at ?? bill.bill_date)}`}
+                    rows={[
+                      ["Customer", redactName(bill.customer_name)],
+                      ["Mobile", redactMobile(bill.customer_mobile)],
+                      ["Amount", formatMoney(bill.bill_amount, bill.currency ?? "INR")],
+                      ["Status", <StatusPill key="status">{bill.status}</StatusPill>],
+                      ["Retry", bill.retry_count ?? 0]
+                    ]}
+                    footer={<div className="flex flex-wrap gap-2"><Button variant="secondary" type="button" onClick={() => setSelectedBill(bill)}><MoreHorizontal size={15} /> Details</Button>{retryable.has(bill.status) ? <Button type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>Resend</Button> : null}</div>}
+                  />
+                ))}
+              </div>
+            </>
           ) : null}
         </Panel>
       </div>
+
+      <Drawer open={Boolean(selectedBill)} title="Bill details" onClose={() => setSelectedBill(null)}>
+        {selectedBill ? <BillDetails bill={selectedBill} onResend={resend} resending={resendingId === selectedBill.id} /> : null}
+      </Drawer>
     </AppShell>
   );
+}
+
+function BillDetails({ bill, onResend, resending }: { bill: BillRow; onResend: (bill: BillRow) => void; resending: boolean }) {
+  return (
+    <div className="grid gap-5">
+      <div className="private-soft-panel p-4">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Bill summary</p>
+        <h3 className="mt-2 text-xl font-semibold">{bill.bill_number ?? "Bill pending"}</h3>
+        <div className="mt-4 grid gap-2 text-sm">
+          <Detail label="Store" value={storeName(bill.store_id)} />
+          <Detail label="Customer" value={redactName(bill.customer_name)} />
+          <Detail label="Mobile" value={redactMobile(bill.customer_mobile)} />
+          <Detail label="Amount" value={formatMoney(bill.bill_amount, bill.currency ?? "INR")} />
+          <Detail label="Status" value={<StatusPill>{bill.status}</StatusPill>} />
+          <Detail label="Provider message" value={bill.provider_message_id ?? "Backend field pending"} />
+          <Detail label="PDF path" value={bill.pdf_path ?? "PDF view endpoint pending"} />
+          <Detail label="Error" value={safeMessage(bill.error_message)} />
+        </div>
+        {retryable.has(bill.status) ? <Button className="mt-4 w-full" type="button" disabled={resending} onClick={() => onResend(bill)}>{resending ? "Queueing resend" : "Queue resend"}</Button> : null}
+      </div>
+      <Panel title="Event timeline" description="A real bill_events API can replace this placeholder timeline later.">
+        <Timeline items={[
+          { title: "Detected", detail: "PDF was detected or imported into the bill workflow.", status: bill.created_at ? formatDateTime(bill.created_at) : "pending" },
+          { title: "Parsed", detail: "Parser extracted bill details. Missing fields should appear in backend events.", status: "placeholder" },
+          { title: "Provider send", detail: "Provider response and message ID will appear when backend exposes event history.", status: bill.status }
+        ]} />
+      </Panel>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div className="flex items-start justify-between gap-3 border-b border-neutral-200 py-2 last:border-b-0"><span className="text-neutral-500">{label}</span><span className="max-w-[60%] text-right font-medium">{value}</span></div>;
 }
 
 function Input({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string }) {

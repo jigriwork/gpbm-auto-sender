@@ -1,90 +1,32 @@
 # Private App UI
 
-## Root cause
+The private app is designed as a command center for retail bill automation.
 
-The dashboard and private pages depended almost entirely on Tailwind utility classes, but the web app did not have an explicit Tailwind/PostCSS setup. In local dev this can fail or become stale enough that the private dashboard appears like raw unstyled HTML.
+## Shell
 
-## Fix
+- Desktop sidebar is fixed and no longer scrolls with the main page.
+- Sidebar navigation is grouped into Overview, Setup, and Business.
+- Mobile uses a sticky header and drawer navigation.
+- Account context shows user email, selected business, role, and setup status.
 
-- Added `apps/web/postcss.config.mjs` with the official `@tailwindcss/postcss` plugin.
-- Added `apps/web/tailwind.config.mjs` with app, components, lib, and package content paths.
-- Updated `apps/web/app/globals.css` with explicit Tailwind config/source directives.
-- Added private app baseline CSS classes for shell, sidebar, cards, buttons, forms, and tables.
-- Preserved the existing Supabase Auth, `BusinessProvider`, `readApi`, and `writeApi` logic.
+## Dashboard
 
-## App shell status
+The dashboard now focuses on operational readiness:
 
-The private dashboard now uses a stronger SaaS shell:
+- Sent, failed, retry, duplicate, invalid mobile, and agent metrics.
+- Bill flow overview from detected to tracked.
+- Store-wise cards for Go Planet, Brand Mark, and future stores.
+- System health cards for agent, provider, parser, and storage.
+- Setup warnings before live customer sending.
 
-- Black left sidebar on desktop.
-- Grouped navigation: Overview, Setup, Business.
-- Active route highlight.
-- Mobile stacking sidebar/header behavior.
-- Topbar with page title, subtitle, current email, business, role, super-admin badge, business switcher, and setup CTA.
+## Operational Pages
 
-## Reusable UI
+- Bills: tabs, filters, responsive table/cards, redacted customer data, retry actions, and detail drawer.
+- Failed bills: failure queue summary and mobile-friendly retry cards.
+- Agents: token safety, setup guide, one-time token UI, and no-manual-entry messaging.
+- Providers: provider selection cards, safe secret inputs, redacted saved state, and live-send warning.
+- Templates: variable list, preview, and clear note that provider testing is pending.
 
-The shared UI component layer now includes:
+## Safety
 
-- `Panel`
-- `PageHeader`
-- `MetricCard`
-- `StatusPill`
-- `LoadingState`
-- `ErrorState`
-- `EmptyState`
-- `DataTable`
-- `Button`
-- `TextInput`
-- `SelectInput`
-- `SetupStepCard`
-- `AgentHealthBadge`
-- `ProviderBadge`
-- `StoreBadge`
-- `OneTimeTokenCard`
-
-## Pages checked
-
-- `/`
-- `/login`
-- `/dashboard`
-- `/bills`
-- `/bills/failed`
-- `/agents`
-- `/whatsapp-providers`
-- `/stores`
-- `/billing-sources`
-- `/parser-profiles`
-- `/templates`
-- `/business`
-- `/settings`
-- `/subscription`
-- `/onboarding`
-
-## Live vs placeholder areas
-
-Live-connected areas remain:
-
-- Dashboard summary
-- Bills list and failed bills
-- Provider credentials read/write
-- Settings CRUD pages
-- Agent create/rotate one-time token display
-- Business context and switcher
-
-Placeholder or partial areas:
-
-- Provider runtime health API
-- Parser testing status
-- Template validation/test-send flow
-- Bill details/PDF/timeline
-- Full edit/delete UI for CRUD resources
-- Team and subscription management
-
-## Remaining UI gaps
-
-- Real dashboard screenshots for public homepage.
-- Rich mobile drawer behavior for navigation.
-- Resource edit drawers/modals.
-- Bill details page with event timeline and PDF access.
-- Team/users and subscription screens.
+Provider credentials are not displayed after save. Agent tokens are only shown after create/rotate. Customer names and mobile numbers are redacted in bill lists.

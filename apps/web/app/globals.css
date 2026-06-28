@@ -10,6 +10,9 @@
   --foreground: #111111;
   --muted: #6f6f68;
   --line: #deded8;
+  --panel: #ffffff;
+  --soft: #f0f0eb;
+  --ink: #050505;
 }
 
 * {
@@ -32,9 +35,25 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 a {
@@ -56,7 +75,8 @@ a {
 .private-shell {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 247, 244, 0) 280px),
+    radial-gradient(circle at 70% 0%, rgba(255, 255, 255, 0.9), rgba(247, 247, 244, 0) 360px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 247, 244, 0) 320px),
     var(--background);
 }
 
@@ -70,7 +90,67 @@ a {
   border-bottom: 1px solid #262626;
   background: #050505;
   color: #ffffff;
+  display: flex;
+  flex-direction: column;
   padding: 16px;
+}
+
+.private-mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(247, 247, 244, 0.94);
+  padding: 12px 16px;
+  backdrop-filter: blur(12px);
+}
+
+.private-mobile-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: minmax(0, 312px) minmax(0, 1fr);
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.private-sidebar-nav {
+  display: grid;
+  gap: 24px;
+  margin-top: 28px;
+}
+
+.private-sidebar-footer {
+  border-top: 1px solid #262626;
+  margin-top: 28px;
+  padding-top: 16px;
+}
+
+.private-nav-link {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 12px;
+  border-radius: 6px;
+  padding: 0 12px;
+  color: #d4d4d4;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.private-nav-link:hover,
+.private-nav-link[data-active="true"] {
+  background: #ffffff;
+  color: #050505;
+}
+
+.private-nav-link svg {
+  color: currentColor;
 }
 
 .private-main {
@@ -93,15 +173,24 @@ a {
 
 .private-card {
   border: 1px solid #deded8;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 45px rgba(17, 17, 17, 0.05);
+  color: #111111;
+  box-shadow: 0 16px 44px rgba(17, 17, 17, 0.05);
 }
 
 .private-card-compact {
   border: 1px solid #e5e5df;
   border-radius: 8px;
   background: #ffffff;
+  color: #111111;
+}
+
+.private-soft-panel {
+  border: 1px solid #e5e5df;
+  border-radius: 8px;
+  background: #f9f9f6;
+  color: #111111;
 }
 
 .private-input {
@@ -113,6 +202,10 @@ a {
   padding: 0 12px;
   color: #111111;
   outline: none;
+}
+
+.private-input::placeholder {
+  color: #8a8a82;
 }
 
 .private-input:focus {
@@ -133,6 +226,7 @@ a {
   color: #ffffff;
   font-size: 14px;
   font-weight: 700;
+  white-space: nowrap;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
@@ -151,6 +245,18 @@ a {
   border-color: #111111;
   background: #111111;
   color: #ffffff;
+}
+
+.private-button-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: #111111;
+}
+
+.private-button-ghost:hover {
+  border-color: #d4d4ce;
+  background: #ffffff;
+  color: #111111;
 }
 
 .private-table {
@@ -176,21 +282,49 @@ a {
   vertical-align: top;
 }
 
+.private-focus-ring:focus-visible {
+  outline: 3px solid rgba(17, 17, 17, 0.18);
+  outline-offset: 2px;
+}
+
+@media (max-width: 979px) {
+  .private-sidebar {
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .private-shell-grid > .private-sidebar {
+    display: none;
+  }
+}
+
 @media (min-width: 980px) {
   .private-shell-grid {
     grid-template-columns: 282px minmax(0, 1fr);
   }
 
+  .private-mobile-header {
+    display: none;
+  }
+
   .private-sidebar {
-    position: sticky;
-    top: 0;
-    min-height: 100vh;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 282px;
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border-right: 1px solid #262626;
     border-bottom: 0;
     padding: 22px 18px;
+    scrollbar-color: #404040 #050505;
+    scrollbar-width: thin;
   }
 
   .private-main {
+    grid-column: 2;
+    min-height: 100vh;
     padding: 28px 34px 56px;
   }
 

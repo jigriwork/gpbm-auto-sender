@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Building2, Radio, Store } from "lucide-react";
 import { AppShell } from "../../components/nav";
-import { DataRow, Panel, StatusPill } from "../../components/ui";
+import { DataRow, ErrorState, LoadingState, MetricCard, Panel, ProgressChecklist, StatusPill } from "../../components/ui";
 import { formatRole, useBusinessContext } from "../../lib/business-context";
 import { readApi, withBusinessId, type ApiState } from "../../lib/client-data";
 
@@ -48,40 +49,39 @@ export default function BusinessPage() {
   const current = state.data?.data ?? business.selectedBusiness;
   const role = state.data?.role ?? business.selectedRole;
   const platformRole = state.data?.platform_role ?? business.platformRole;
-  const checklist: Array<[string, boolean]> = [
-    ["Business selected", Boolean(current?.id)],
-    ["Stores added", counts.stores > 0],
-    ["Agents registered", counts.agents > 0],
-    ["Provider configured", false],
-    ["Template mapped", false],
-    ["Test bill sent", false]
+  const checklist = [
+    { label: "Business selected", done: Boolean(current?.id), detail: "Tenant context is available." },
+    { label: "Stores added", done: counts.stores > 0, detail: "At least one store exists." },
+    { label: "Agents registered", done: counts.agents > 0, detail: "At least one device is registered." },
+    { label: "Provider configured", done: false, detail: "Check WhatsApp providers page." },
+    { label: "Template mapped", done: false, detail: "Check Templates page." },
+    { label: "Test bill sent", done: false, detail: "Requires sample PDF and provider setup." }
   ];
 
   return (
-    <AppShell title="Business" eyebrow="Tenant layer">
-      {state.status === "loading" ? <p className="mb-4 rounded border border-neutral-300 bg-white p-3 text-sm text-neutral-600">Loading business profile.</p> : null}
-      {state.status === "auth" || state.status === "error" ? <p className="mb-4 rounded border border-neutral-300 bg-white p-3 text-sm text-neutral-600">{state.message}</p> : null}
+    <AppShell title="Business" eyebrow="Tenant profile" subtitle="Review selected business context, role, setup progress, stores, and agents.">
+      {state.status === "loading" ? <LoadingState title="Loading business profile" detail="Reading selected business and membership." /> : null}
+      {state.status === "auth" || state.status === "error" ? <ErrorState title="Business unavailable" detail={state.message ?? "Business profile could not be loaded."} /> : null}
+      <div className="mb-5 grid gap-4 md:grid-cols-3">
+        <MetricCard label="Stores" value={counts.stores} detail="Business-scoped stores" />
+        <MetricCard label="Agents" value={counts.agents} detail="Registered local devices" />
+        <MetricCard label="Role" value={business.isSuperAdmin ? "Super Admin" : formatRole(role)} detail="Current dashboard access" />
+      </div>
       <div className="grid gap-5 xl:grid-cols-[1fr_0.8fr]">
-        <Panel title="Business profile">
+        <Panel title="Business profile" description="This data should come from the authenticated business context.">
           <DataRow label="Name" value={current?.name ?? "Not available"} />
           <DataRow label="Slug" value={current?.slug ?? "Not set"} />
           <DataRow label="Status" value={<StatusPill>{current?.status ?? "unknown"}</StatusPill>} />
+          <DataRow label="Business ID" value={current?.id ?? "Not selected"} />
           <DataRow label="User role" value={formatRole(role)} />
           <DataRow label="Platform role" value={platformRole ? formatRole(platformRole) : "None"} />
-          <DataRow label="Stores" value={counts.stores} />
-          <DataRow label="Agents" value={counts.agents} />
-          <DataRow label="Provider status" value={<StatusPill>check provider page</StatusPill>} />
         </Panel>
-        <Panel title="Setup completeness">
-          <div className="grid gap-2">
-            {checklist.map(([label, done]) => (
-              <div key={String(label)} className="flex items-center justify-between gap-3 rounded border border-neutral-200 p-3">
-                <span className="text-sm font-medium">{label}</span>
-                <StatusPill>{done ? "done" : "pending"}</StatusPill>
-              </div>
-            ))}
-          </div>
-        </Panel>
+        <ProgressChecklist items={checklist} />
+      </div>
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <Panel title="Store layer"><Store size={20} /><p className="mt-3 text-sm leading-6 text-neutral-600">Stores own source/parser/template/agent links and bill reporting.</p></Panel>
+        <Panel title="Business layer"><Building2 size={20} /><p className="mt-3 text-sm leading-6 text-neutral-600">Every tenant-safe record must include business_id.</p></Panel>
+        <Panel title="Agent layer"><Radio size={20} /><p className="mt-3 text-sm leading-6 text-neutral-600">Local agents should authenticate with one-time token setup and heartbeat.</p></Panel>
       </div>
     </AppShell>
   );

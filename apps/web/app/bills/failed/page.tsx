@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { BillStatus } from "@gpbm/shared";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { demoBills } from "../../../lib/demo";
 import { AppShell } from "../../../components/nav";
-import { Button, EmptyState, ErrorState, LoadingState, Panel, StatusPill } from "../../../components/ui";
+import { Button, EmptyState, ErrorState, LoadingState, MobileDataCard, Panel, StatusPill } from "../../../components/ui";
 import { useBusinessContext } from "../../../lib/business-context";
 import { formatDateTime, readApi, safeMessage, storeName, writeApi, type ApiState } from "../../../lib/client-data";
 
@@ -61,15 +62,20 @@ export default function FailedBillsPage() {
     if (!response.ok) setState((current) => ({ ...current, message: response.message || "Resend could not be queued safely." }));
   }
 
+  const rows = state.data ?? [];
+
   return (
-    <AppShell title="Failed Bills" eyebrow="Overview" subtitle="Bills that need retry, parser review, or customer data correction.">
+    <AppShell title="Failed Bills" eyebrow="Retry operations" subtitle="Bills that need resend, parser review, or mobile number correction.">
+      <div className="mb-5 grid gap-4 md:grid-cols-4">
+        {failureStatuses.map((status) => <Summary key={status} label={status.replaceAll("_", " ")} count={rows.filter((bill) => bill.status === status).length} />)}
+      </div>
       <Panel title="Failure queue" description="Only failed, invalid mobile, parsing failed, and retrying bill records appear here.">
         {state.status === "loading" ? <LoadingState title="Loading failed bills" detail="Reading failed and retrying bill records." /> : null}
         {state.status === "auth" || state.status === "error" ? <ErrorState title="Failure queue unavailable" detail={state.message ?? "Failed bills could not be loaded."} /> : null}
         {state.status === "empty" ? <EmptyState detail={state.message} /> : null}
         <div className="grid gap-3">
-          {(state.data ?? []).map((bill) => (
-            <div key={bill.id} className="private-card-compact grid gap-3 p-4 md:grid-cols-[1fr_1fr_auto] md:items-center">
+          {rows.map((bill) => (
+            <div key={bill.id} className="hidden private-card-compact gap-4 p-4 md:grid md:grid-cols-[1fr_1.1fr_auto] md:items-center">
               <div>
                 <p className="font-semibold">{bill.bill_number ?? "Bill pending"}</p>
                 <p className="text-sm text-neutral-500">{storeName(bill.store_id)} / updated {formatDateTime(bill.updated_at ?? bill.created_at)}</p>
@@ -82,14 +88,42 @@ export default function FailedBillsPage() {
                 <StatusPill>{bill.status}</StatusPill>
                 {resendStatuses.has(bill.status) ? (
                   <Button type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>
-                    {resendingId === bill.id ? "Queueing" : "Resend"}
+                    <RefreshCw size={15} /> {resendingId === bill.id ? "Queueing" : "Resend"}
                   </Button>
                 ) : null}
               </div>
             </div>
           ))}
+          <div className="grid gap-3 md:hidden">
+            {rows.map((bill) => (
+              <MobileDataCard
+                key={bill.id}
+                title={bill.bill_number ?? "Bill pending"}
+                subtitle={storeName(bill.store_id)}
+                rows={[
+                  ["Status", <StatusPill key="status">{bill.status}</StatusPill>],
+                  ["Updated", formatDateTime(bill.updated_at ?? bill.created_at)],
+                  ["Reason", safeMessage(bill.error_message)],
+                  ["Retry count", bill.retry_count ?? 0]
+                ]}
+                footer={resendStatuses.has(bill.status) ? <Button type="button" disabled={resendingId === bill.id} onClick={() => resend(bill)}>Resend</Button> : null}
+              />
+            ))}
+          </div>
         </div>
       </Panel>
     </AppShell>
+  );
+}
+
+function Summary({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="private-card p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold capitalize">{label}</p>
+        <AlertTriangle size={16} />
+      </div>
+      <p className="mt-3 text-3xl font-semibold">{count}</p>
+    </div>
   );
 }

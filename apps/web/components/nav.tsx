@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { LogoutButton } from "./logout-button";
 import { formatRole, useBusinessContext } from "../lib/business-context";
-import { PageHeader, StatusPill } from "./ui";
+import { PageHeader, ProgressChecklist, StatusBadge, StatusPill } from "./ui";
 import {
   AlertTriangle,
   Building2,
   CreditCard,
   FileText,
   LayoutDashboard,
+  Menu,
   MessageSquare,
   Radio,
   ReceiptText,
   Settings,
   Store,
-  Workflow
+  Workflow,
+  X
 } from "lucide-react";
 
 const navGroups = [
@@ -50,13 +53,30 @@ const navGroups = [
   }
 ];
 
+const setupItems = [
+  { label: "Business", done: true, detail: "Tenant context" },
+  { label: "Stores", done: true, detail: "Go Planet and Brand Mark examples" },
+  { label: "Provider", done: false, detail: "Credentials required" },
+  { label: "Template", done: false, detail: "Variables pending" },
+  { label: "Agent", done: false, detail: "Install flow pending" }
+];
+
 export function AppShell({ children, title, eyebrow, subtitle }: { children: React.ReactNode; title: string; eyebrow?: string; subtitle?: string }) {
   const pathname = usePathname();
   const business = useBusinessContext();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const currentRole = business.isSuperAdmin ? "Super Admin" : formatRole(business.selectedRole);
 
   return (
     <div className="private-shell">
+      <MobileHeader onOpen={() => setMobileOpen(true)} businessName={business.selectedBusiness?.name} title={title} />
+      {mobileOpen ? (
+        <div className="private-mobile-drawer">
+          <Sidebar pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+          <button type="button" aria-label="Close navigation" className="bg-transparent" onClick={() => setMobileOpen(false)} />
+          <button type="button" aria-label="Close navigation" className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded bg-white text-black" onClick={() => setMobileOpen(false)}><X size={18} /></button>
+        </div>
+      ) : null}
       <div className="private-shell-grid">
         <Sidebar pathname={pathname} />
         <main className="private-main">
@@ -88,17 +108,32 @@ export function AppShell({ children, title, eyebrow, subtitle }: { children: Rea
   );
 }
 
-function Sidebar({ pathname }: { pathname: string }) {
+function MobileHeader({ onOpen, businessName, title }: { onOpen: () => void; businessName?: string; title: string }) {
+  return (
+    <header className="private-mobile-header">
+      <button type="button" aria-label="Open navigation" className="grid h-10 w-10 place-items-center rounded border border-neutral-300 bg-white" onClick={onOpen}>
+        <Menu size={18} />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">{title}</p>
+        <p className="truncate text-xs text-neutral-500">{businessName ?? "Business not selected"}</p>
+      </div>
+      <Link href="/dashboard" className="grid h-10 w-10 place-items-center rounded bg-black text-xs font-black text-white">GA</Link>
+    </header>
+  );
+}
+
+function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
     <aside className="private-sidebar">
-      <Link href="/dashboard" className="flex items-center gap-3">
+      <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-3">
         <span className="grid h-11 w-11 place-items-center rounded bg-white text-sm font-black text-black">GA</span>
         <span>
           <span className="block text-sm font-semibold">GPBM Auto Sender</span>
-          <span className="block text-xs text-neutral-400">SaaS bill delivery</span>
+          <span className="block text-xs text-neutral-400">Retail bill automation</span>
         </span>
       </Link>
-      <nav className="mt-7 grid gap-6">
+      <nav className="private-sidebar-nav">
         {navGroups.map((group) => (
           <div key={group.label}>
             <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">{group.label}</p>
@@ -109,7 +144,9 @@ function Sidebar({ pathname }: { pathname: string }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex min-h-10 items-center gap-3 rounded px-3 text-sm font-medium transition ${active ? "bg-white text-black" : "text-neutral-300 hover:bg-white hover:text-black"}`}
+                    data-active={active ? "true" : "false"}
+                    className="private-nav-link"
+                    onClick={onNavigate}
                   >
                     <item.icon aria-hidden="true" size={17} />
                     {item.label}
@@ -120,7 +157,10 @@ function Sidebar({ pathname }: { pathname: string }) {
           </div>
         ))}
       </nav>
-      <div className="mt-7 border-t border-neutral-800 pt-4">
+      <div className="mt-6 hidden lg:block">
+        <ProgressChecklist items={setupItems} />
+      </div>
+      <div className="private-sidebar-footer">
         <LogoutButton variant="dark" />
       </div>
     </aside>
@@ -136,6 +176,7 @@ function AccountCard({ email, businessName, role, isSuperAdmin, loading }: { ema
         <span>/</span>
         <span>{role}</span>
         {isSuperAdmin ? <StatusPill>Super Admin</StatusPill> : null}
+        <StatusBadge tone="muted">setup pending</StatusBadge>
       </div>
     </div>
   );
